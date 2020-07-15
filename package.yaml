@@ -1,0 +1,23 @@
+name:                icfpc2020-powder
+version:             0.1.0.0
+github:              "mniip/icfpc2020"
+author:              "mniip & savask"
+# maintainer:          "mniip@mniip.com"
+# copyright:           "2020 Author name here"
+
+
+dependencies:
+- base >= 4.7 && < 5
+- http-conduit >= 2.3
+- utf8-string >= 1.0
+- bytestring >= 0.10
+- binary
+
+executables:
+  main:
+    main:                app/Main.hs
+    source-dirs:         .
+    ghc-options:
+    - -threaded
+    - -O2
+    - -rtsopts

@@ -1,5 +1,7 @@
 {-# LANGUAGE DeriveFunctor #-}
 
+module Modem where
+
 import Data.Binary.Get
 import Data.Maybe
 import Control.Applicative
