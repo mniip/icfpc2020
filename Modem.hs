@@ -29,7 +29,8 @@ trigTransform freq len signal finetune =
 -- | Split signal into chunks and apply 'trigTransform' to each, on multiple
 -- frequencies.
 trigTransformChunks
-  :: (i -> Double) -- ^ Wave frequencies, full periods per sample
+  :: (Bounded i, Enum i)
+  => (i -> Double) -- ^ Wave frequencies, full periods per sample
   -> [Double] -- ^ Input signal
   -> Rational -- ^ Length of one chunk in samples
   -> [i -> Complex Double] -- ^ Re = sine integral, Im = cosine integral
@@ -37,14 +38,15 @@ trigTransformChunks freqs signal size = go 0 signal
   where
     go _ [] = []
     go finetune signal =
-      fmap (\freq -> trigTransform freq size current (fromRational finetune)) freqs
-      : go (frac cutoff) next
+      ((memo !!) . fromEnum) : go (frac cutoff) next
       where
         cutoff :: Rational
         cutoff = size + finetune
         current = take (ceiling cutoff) signal
         next = drop (floor cutoff) signal
         frac r = (numerator r `mod` denominator r) % denominator r
+        memo = (\i -> trigTransform (freqs i) size current (fromRational finetune))
+          <$> [minBound..maxBound]
 
 getPCM :: Get [Double]
 getPCM = many $ (\sample -> fromIntegral sample / 0x8000) <$> getInt16le
