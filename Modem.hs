@@ -21,10 +21,8 @@ trigTransform
             -- be shifted back
   -> Complex Double -- ^ Re = sine integral, Im = cosine integral
 trigTransform freq len signal finetune =
-  sum $ zipWith (\i s -> scale (s * dx) $ sic $ omega * (fromIntegral i + finetune)) [0::Int ..] signal
+  sum $ zipWith (\i s -> mkPolar (s * dx) $ omega * (fromIntegral i + finetune)) [0::Int ..] signal
   where
-    sic theta = sin theta :+ cos theta
-    scale s (x :+ y) = s * x :+ s * y
     dx = 2 / fromRational len
     omega = 2 * pi * freq
 
