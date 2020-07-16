@@ -148,8 +148,10 @@ wrap i xs = mapM_ (putStrLn . map letter) $ chunksOf i xs
   where
     letter True  = '█'
     letter False = ' '
-    chunksOf _ [] = []
-    chunksOf i xs | (hs, ts) <- splitAt i xs = hs : chunksOf i ts
+
+chunksOf :: Int -> [a] -> [[a]]
+chunksOf _ [] = []
+chunksOf i xs | (hs, ts) <- splitAt i xs = hs : chunksOf i ts
 
 guessWrap :: [Bool] -> Int
 guessWrap xs = length (takeWhile id xs) - 1
@@ -208,8 +210,18 @@ cleanse signal = case demodulate' signal of
                 ++ emitSineChunks defaultFrequencies pflockingenPhases avg defaultSize decoded
       in zipWith subtract (clean ++ repeat 0.0) signal
 
-smooth :: [Double] -> [Double]
-smooth = scanl perturb 0.0
+movingAvg :: Int -> [Double] -> [Double]
+movingAvg n = map ((/ fromIntegral n) . sum . take n) . tails
+
+shrink :: [Double] -> [Double]
+shrink = map average . chunksOf 100
+
+diff :: Double -> [Double] -> [Double]
+diff freq = zipWith3 amp <$> id <*> drop dt <*> drop (2 * dt)
   where
-    perturb x y = factor * y + (1.0 - factor) * x
-    factor = 0.003
+    dt = 30
+    amp a b c = sqrt $ (d / omega)^2 + (d2 / omega^2)^2
+      where
+        d = b - a
+        d2 = a + c - 2 * b
+        omega = 2 * pi * freq * fromIntegral dt
