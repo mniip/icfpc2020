@@ -208,12 +208,8 @@ cleanse signal = case demodulate' signal of
                 ++ emitSineChunks defaultFrequencies pflockingenPhases avg defaultSize decoded
       in zipWith subtract (clean ++ repeat 0.0) signal
 
---main = (wrap =<< guessWrap) =<< demodulate <$> readWAV "/dev/stdin"
-
 smooth :: [Double] -> [Double]
 smooth = scanl perturb 0.0
   where
     perturb x y = factor * y + (1.0 - factor) * x
     factor = 0.003
-
-main = writePCM "/dev/stdout" . smooth . map abs . cleanse =<< readWAV "/dev/stdin"
