@@ -1,8 +1,9 @@
-{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE DeriveFunctor, BangPatterns #-}
 
 module Modem where
 
 import Data.Binary.Get
+import Data.Binary.Put
 import Data.Maybe
 import Control.Applicative
 import Control.Monad
@@ -28,6 +29,9 @@ trigTransform freq len signal finetune =
     dx = 2 / fromRational len
     omega = 2 * pi * freq
 
+frac :: Integral a => Ratio a -> Ratio a
+frac r = (numerator r `mod` denominator r) % denominator r
+
 -- | Split signal into chunks and apply 'trigTransform' to each, on multiple
 -- frequencies.
 trigTransformChunks
@@ -46,15 +50,22 @@ trigTransformChunks freqs signal size = go 0 signal
         cutoff = size + finetune
         current = take (ceiling cutoff) signal
         next = drop (floor cutoff) signal
-        frac r = (numerator r `mod` denominator r) % denominator r
         memo = (\i -> trigTransform (freqs i) size current (fromRational finetune))
           <$> [minBound..maxBound]
 
 getPCM :: Get [Double]
 getPCM = many $ (\sample -> fromIntegral sample / 0x8000) <$> getInt16le
 
+putPCM :: [Double] -> Put
+putPCM xs = mapM_ putSample xs
+  where
+    putSample s = putWord16le $ floor $ max (-0x8000) $ min 0x7FFF $ s * 0x8000
+
 readPCM :: String -> IO [Double]
 readPCM filename = runGet getPCM <$> LBS.readFile filename
+
+writePCM :: String -> [Double] -> IO ()
+writePCM filename xs = LBS.writeFile filename $ runPut $ putPCM xs
 
 getWAV :: Get [Double]
 getWAV = do
@@ -90,7 +101,9 @@ guessCutoff xs = average $ drop lo $ take hi $ sort xs
     len = length xs
     lo = floor (fromIntegral len * 0.05)
     hi = ceiling (fromIntegral len * 0.95)
-    average xs = sum xs / fromIntegral (length xs)
+
+average :: Fractional a => [a] -> a
+average xs = sum xs / fromIntegral (length xs)
 
 defaultFrequencies :: Bool -> Double
 defaultFrequencies False = 500.0 / 44100
@@ -99,26 +112,36 @@ defaultFrequencies True = 600.0 / 44100
 defaultSize :: Rational
 defaultSize = 0.05 * 44100
 
-translateModulation
+translateModulation'
   :: (Enum i, Bounded i)
   => [i -> Complex Double]
-  -> [Either [i] i] -- ^ Right means there's a single prevalent frequency,
+  -> ([Either [i] i], Double)
+                    -- ^ Right means there's a single prevalent frequency,
                     -- Left means there's multiple or no frequencies.
-translateModulation xs = map (\m -> single (\i -> m i > cutoff)) mags
+                    -- The second component is the average amplitude of
+                    -- active frequencies
+translateModulation' xs = (map (\m -> single (\i -> m i > cutoff)) mags, avg)
   where
     mags = map (magnitude .) xs
-    cutoff = guessCutoff $ liftA2 ($) mags [minBound..maxBound]
+    allAmps = liftA2 ($) mags [minBound..maxBound]
+    cutoff = guessCutoff allAmps
     single p = case filter p [minBound..maxBound] of
                  [x] -> Right x
                  xs  -> Left xs
+    avg = average $ filter (> cutoff) allAmps
 
-demodulate :: [Double] -> [Bool]
-demodulate signal = mapMaybe ok $ translateModulation
-  $ trigTransformChunks defaultFrequencies signal defaultSize
+demodulate' :: [Double] -> ([Bool], Double, Int)
+  -- ^ Return decoded data, average amplitude, initial delay in chunks
+demodulate' signal = (mapMaybe ok decoded, avg, length $ takeWhile (== Left []) decoded)
   where
     ok (Right b) = Just b
     ok (Left []) = Nothing
     ok (Left bs) = error $ "Frequency conflict: " ++ show bs
+    (decoded, avg) = translateModulation'
+      $ trigTransformChunks defaultFrequencies signal defaultSize
+
+demodulate :: [Double] -> [Bool]
+demodulate signal = case demodulate' signal of (xs, _, _) -> xs
 
 wrap :: Int -> [Bool] -> IO ()
 wrap i xs = mapM_ (putStrLn . map letter) $ chunksOf i xs
@@ -131,4 +154,66 @@ wrap i xs = mapM_ (putStrLn . map letter) $ chunksOf i xs
 guessWrap :: [Bool] -> Int
 guessWrap xs = length (takeWhile id xs) - 1
 
-main = (wrap =<< guessWrap) =<< demodulate <$> readWAV "/dev/stdin"
+emitSine
+  :: Double -- ^ Wave frequency, full periods per sample
+  -> Int -- ^ Signal length
+  -> Double -- ^ Phase, number of samples by which the signal should
+            -- be shifted back
+  -> Double -- ^ Amplitude
+  -> [Double]
+emitSine freq len finetune amp
+  = map (\i -> amp * sin (omega * (fromIntegral i - finetune))) [0..len - 1]
+  where
+    omega = 2 * pi * freq
+
+emitSineChunks
+  :: (i -> Double) -- ^ Frequency mapping
+  -> (Int -> Double) -- ^ Phase mapping
+  -> Double -- ^ Amplitude
+  -> Rational -- ^ Length of one chunk in samples
+  -> [i]
+  -> [Double]
+emitSineChunks freqs phases amp size xs = go 0 0 xs
+  where
+    go !i !pos [] = []
+    go !i !pos (x:xs)
+      = emitSine (freqs x) (ceiling new - ceiling pos) (phases i) amp
+        ++ go (i + 1) new xs
+      where
+        new = pos + size
+
+pflockingenDelay :: Rational
+pflockingenDelay = 20 * defaultSize
+
+pegovkaDelay :: Rational
+pegovkaDelay = 40 * defaultSize
+
+pflockingenPhases :: Int -> Double
+pflockingenPhases i = if (i == 1 || i == 2) || (i >= 83 && i < 718) || (i >= 1720 && i < 2887) || (i >= 6376 && i < 12060)
+  then 1.0
+  else 0.0
+
+pegovkaPhases :: Int -> Double
+pegovkaPhases i = 0.0
+
+modulate :: [Bool] -> [Double]
+modulate xs
+  = replicate (floor pflockingenDelay) 0.0
+    ++ emitSineChunks defaultFrequencies pflockingenPhases 1.0 defaultSize xs
+
+cleanse :: [Double] -> [Double]
+cleanse signal = case demodulate' signal of
+  (decoded, avg, delay) ->
+    let clean = replicate (floor $ fromIntegral delay * defaultSize) 0.0
+                ++ emitSineChunks defaultFrequencies pflockingenPhases avg defaultSize decoded
+      in zipWith subtract (clean ++ repeat 0.0) signal
+
+--main = (wrap =<< guessWrap) =<< demodulate <$> readWAV "/dev/stdin"
+
+smooth :: [Double] -> [Double]
+smooth = scanl perturb 0.0
+  where
+    perturb x y = factor * y + (1.0 - factor) * x
+    factor = 0.003
+
+main = writePCM "/dev/stdout" . smooth . map abs . cleanse =<< readWAV "/dev/stdin"
