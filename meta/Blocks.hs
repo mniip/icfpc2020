@@ -14,6 +14,8 @@ import Data.List.Split
 import qualified Data.Set as S
 import Numeric.Natural
 
+import Language
+
 wrap :: [Bool] -> [[Bool]]
 wrap = chunksOf =<< guessWrap
 
@@ -130,55 +132,16 @@ selectBlock :: Block Int -> [[a]] -> [[a]]
 selectBlock ((x1, y1), (x2, y2)) = map (drop x1 . take (x2 + 1)) . drop y1 . take (y2 + 1)
 
 data BlockType
-  = BNum Integer
+  = BAtom Atom
   | BEq
   | BAp
-  | BSucc
-  | BPred
-  | BAdd
   | BVar Integer
-  | BMul
-  | BDiv
-  | BBEq -- ^ Boolean equality
-  | BTrue -- ^ \t f -> t
-  | BFalse -- ^ \t f -> f
-  | BLt
-  | BMod -- ^ Modulate
-  | BDem -- ^ Demodulate
-  | BEval -- ^ Unknown lambda looking symbol
-  | BLineNum Integer
-  | BNeg
-  | BS -- ^ \f g x -> f x (g x)
-  | BFlip -- ^ \f x y -> f y x
-  | BComp -- ^ \f g x -> f (g x)
-  | BPow2 -- ^ f = ((flip (eq 0)) 1) <*> (((.) ((*) 2)) (((.) f) ((+) (-1))))
-  | BId -- ^ \x -> x
-  | BPair -- ^ \x y z -> z x y
-  | BFst -- ^  \x -> x True
-  | BSnd -- ^  \x -> x False
-  | BNil -- ^ const True
-  | BIsNil -- ^ (?) isNil Nil = True; isNil (Pair x y) = False
   | BListOpen
   | BListComma
-  | BListClose -- ^ Open x Comma y Comma z Close = Pair x (Pair y (Pair z Nil))
-  | BPoint -- ^ Point x y = Pair x y
-  | BImage -- ^ Creates a 17x17(?) image from a list of pixels
-  | BChecker -- ^ \a b -> Image with checkerboard pattern (TODO pixmap33)
-  | BMapImage -- ^ mapImage Nil = Nil; mapImage (Pair x xs) = Pair (Image x) (mapImage xs)
-  | BChoose -- ^ \case { 0 -> True; 1 -> False }
+  | BListClose
   | BUnknownOp Int Int Natural
   | BUnknown Int Int Natural
   deriving (Eq, Ord, Show)
-
--- :15 :
--- f (\a b c -> b) = \x y -> x
--- f (\p -> p x0 x1) = \x y -> y
--- f h = f (const (const False)) True {- ??? -}
--- TODO : pixmap33 (checker?)
-
--- pixmap35: mod Nil, mod Pair
--- pixmap36: eval [0] = [1, X]
--- 
 
 numValue :: [[Bool]] -> Natural
 numValue = go 0 0 . concat
@@ -206,51 +169,50 @@ parseBlock :: [[Bool]] -> BlockType
 parseBlock xs
   | width == height
   , and (tail $ head xs) && all head (tail xs) && not (head . head $ xs)
-  = BNum $ toInteger $ numValue $ tail <$> tail xs
+  = BAtom $ Num $ toInteger $ numValue $ tail <$> tail xs
   | width + 1 == height
   , and (tail $ head xs) && all head (tail xs) && not (head . head $ xs) && not (and $ tail $ last xs)
-  = BNum $ negate $ toInteger $ numValue $ tail <$> tail xs
+  = BAtom $ Num $ negate $ toInteger $ numValue $ tail <$> tail xs
   | width >= 4 && height >= 4
   , and (head xs) && and (last xs) && all head xs && all last xs
-  , BNum i <- parseBlock $ map (map not . init . tail) . init . tail $ xs
+  , BAtom (Num i) <- parseBlock $ map (map not . init . tail) . init . tail $ xs
   = BVar i
   | height == 2
   , xs !! 0 == map not (xs !! 1)
-  , Just i <- lineDecode $ xs !! 0
-  = BLineNum i
+  = BAtom $ Bits $ xs !! 0
   | width == height
   , and (head xs) && all head xs
   = case (width - 1, height - 1, numValue $ tail <$> tail xs) of
-      (1, 1, 0   ) -> BAp
-      (1, 1, 1   ) -> BId
-      (2, 2, 2   ) -> BTrue
-      (2, 2, 5   ) -> BComp
-      (2, 2, 6   ) -> BFlip
-      (2, 2, 7   ) -> BS
-      (2, 2, 8   ) -> BFalse
-      (2, 2, 10  ) -> BNeg
+      (1, 1, 0   ) -> BAp 
+      (1, 1, 1   ) -> BAtom $ Comb Id
+      (2, 2, 2   ) -> BAtom $ Comb CTrue
+      (2, 2, 5   ) -> BAtom $ Comb Compose
+      (2, 2, 6   ) -> BAtom $ Comb Flip
+      (2, 2, 7   ) -> BAtom $ Comb S
+      (2, 2, 8   ) -> BAtom $ Comb CFalse
+      (2, 2, 10  ) -> BAtom $ Comb Neg
       (2, 2, 12  ) -> BEq
-      (2, 2, 14  ) -> BNil
-      (2, 2, 15  ) -> BIsNil
-      (3, 3, 40  ) -> BDiv
-      (3, 3, 146 ) -> BMul
-      (3, 3, 170 ) -> BMod
-      (3, 3, 174 ) -> BEval
-      (3, 3, 341 ) -> BDem
-      (3, 3, 365 ) -> BAdd
-      (3, 3, 401 ) -> BPred
-      (3, 3, 416 ) -> BLt
-      (3, 3, 417 ) -> BSucc
-      (3, 3, 448 ) -> BBEq
-      (4, 4, 58336) -> BChoose
-      (4, 4, 64170) -> BPair
-      (4, 4, 64174) -> BFst
-      (4, 4, 64171) -> BSnd
-      (5, 5, 17043521) -> BPoint
-      (5, 5, 33047056) -> BImage
-      (5, 5, 11184810) -> BChecker
-      (6, 6, 68191693600) -> BPow2
-      (6, 6, 68259412260) -> BMapImage
+      (2, 2, 14  ) -> BAtom $ Comb Nil
+      (2, 2, 15  ) -> BAtom $ Comb IsNil
+      (3, 3, 40  ) -> BAtom $ Comb Div
+      (3, 3, 146 ) -> BAtom $ Comb Mul
+      (3, 3, 170 ) -> BAtom $ Comb Mod
+      (3, 3, 174 ) -> BAtom $ Comb Eval
+      (3, 3, 341 ) -> BAtom $ Comb Dem
+      (3, 3, 365 ) -> BAtom $ Comb Add
+      (3, 3, 401 ) -> BAtom $ Comb Pred
+      (3, 3, 416 ) -> BAtom $ Comb Lt
+      (3, 3, 417 ) -> BAtom $ Comb Succ
+      (3, 3, 448 ) -> BAtom $ Comb EqBool
+      (4, 4, 58336) -> BAtom $ Comb Choose
+      (4, 4, 64170) -> BAtom $ Comb Pair
+      (4, 4, 64174) -> BAtom $ Comb Fst
+      (4, 4, 64171) -> BAtom $ Comb Snd
+      (5, 5, 17043521) -> BAtom $ Comb Point
+      (5, 5, 33047056) -> BAtom $ Comb MkImage
+      (5, 5, 11184810) -> BAtom $ Comb MkChecker
+      (6, 6, 68191693600) -> BAtom $ Comb Pow2
+      (6, 6, 68259412260) -> BAtom $ Comb MapImage
       (w, h, i   ) -> BUnknownOp w h i
   | otherwise
   = case (width, height, numValue xs) of
@@ -273,8 +235,10 @@ displayParsed grid
 
     show' (BUnknownOp _ _ i) = ":" ++ show i
     show' (BUnknown _ _ i) = "?" ++ show i
+    {-
     show' (BNum i) = show i
     show' (BLineNum i) = "[" ++ show i ++ "]"
+    -}
     show' b = tail $ show b
 
     blocks = map (\r -> (r, parseBlock $ selectBlock r grid)) $ findBlocksIgnoringBorder grid
