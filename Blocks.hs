@@ -1,6 +1,7 @@
 {-# LANGUAGE BangPatterns #-}
 module Blocks where
 
+import Control.Monad.Trans.State
 import Data.Tuple
 import Data.List
 import Data.Bits
@@ -144,6 +145,7 @@ data BlockType
   | BMod -- ^ Modulate
   | BDem -- ^ Demodulate
   | BEval -- ^ Unknown lambda looking symbol
+  | BLineNum Integer
   | BUnknownOp Int Int Natural
   | BUnknown Int Int Natural
   deriving (Eq, Ord, Show)
@@ -155,6 +157,21 @@ numValue = go 0 0 . concat
     go n i (False:xs) = go n (i + 1) xs
     go n i (True:xs) = go (setBit n i) (i + 1) xs
 
+lineDecode :: [Bool] -> Maybe Integer
+lineDecode xs = case runStateT go xs of
+  Just (r, []) -> pure r
+  _            -> empty
+  where
+    go = do sign <- bit
+            expect (not sign)
+            let getLen = bit >>= \b -> if b then succ <$> getLen else pure 0
+            len <- getLen
+            ((if sign then -1 else 1) *)
+              <$> foldl' (\x y -> 2*x + if y then 1 else 0) 0
+              <$> replicateM (4*len) bit
+    bit = StateT uncons
+    expect b = bit >>= \x -> if x == b then pure () else StateT mempty
+
 parseBlock :: [[Bool]] -> BlockType
 parseBlock xs
   | width == height
@@ -163,10 +180,20 @@ parseBlock xs
   | width + 1 == height
   , and (tail $ head xs) && all head (tail xs) && not (head . head $ xs) && not (and $ tail $ last xs)
   = BNum $ negate $ toInteger $ numValue $ tail <$> tail xs
+  | width >= 4 && height >= 4
+  , and (head xs) && and (last xs) && all head xs && all last xs
+  , BNum i <- parseBlock $ map (map not . init . tail) . init . tail $ xs
+  = BVar i
+  | height == 2
+  , xs !! 0 == map not (xs !! 1)
+  , Just i <- lineDecode $ xs !! 0
+  = BLineNum i
   | width == height
   , and (head xs) && all head xs
   = case (width - 1, height - 1, numValue $ tail <$> tail xs) of
       (1, 1, 0   ) -> BAp
+      (2, 2, 2   ) -> BTrue
+      (2, 2, 8   ) -> BFalse
       (2, 2, 12  ) -> BEq
       (3, 3, 40  ) -> BDiv
       (3, 3, 146 ) -> BMul
@@ -179,9 +206,6 @@ parseBlock xs
       (3, 3, 417 ) -> BSucc
       (3, 3, 448 ) -> BBEq
       (w, h, i   ) -> BUnknownOp w h i
-  | and (head xs) && and (last xs) && all head xs && all last xs
-  , BNum i <- parseBlock $ map (init . tail) . init . tail $ xs
-  = BVar i
   | otherwise
   = BUnknown width height $ numValue xs
   where
@@ -194,13 +218,14 @@ displayParsed grid
       putStrLn $ concatMap (\x -> str (x, y)) [0..width-1]
   where
     str (x, y) = case find (\b -> inRange (fst b) (x, y)) blocks of
-      Just (r, b) -> (if grid !! y !! x then "\x1B[101m" else "") ++ [show' b !! index (swap *** swap $ r) (y, x)] ++ "\x1B[0m"
+      Just (r, b) -> (if grid !! y !! x then "\x1B[101m" else "") ++ [(show' b ++ repeat ' ') !! index (swap *** swap $ r) (y, x)] ++ "\x1B[0m"
       Nothing     -> if grid !! y !! x then "█" else " "
 
-    show' (BUnknownOp _ _ i) = ":" ++ show i ++ repeat ' '
-    show' (BUnknown _ _ i) = "?" ++ show i ++ repeat ' '
-    show' (BNum i) = show i ++ repeat ' '
-    show' b = show b ++ repeat ' '
+    show' (BUnknownOp _ _ i) = ":" ++ show i
+    show' (BUnknown _ _ i) = "?" ++ show i
+    show' (BNum i) = show i
+    show' (BLineNum i) = "[" ++ show i ++ "]"
+    show' b = tail $ show b
 
     blocks = map (\r -> (r, parseBlock $ selectBlock r grid)) $ findBlocksIgnoringBorder grid
 
