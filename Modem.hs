@@ -8,6 +8,7 @@ import Data.Maybe
 import Control.Applicative
 import Control.Monad
 import Data.List
+import Data.List.Split
 import Data.Complex
 import Data.Ratio
 import Data.Int
@@ -142,19 +143,6 @@ demodulate' signal = (mapMaybe ok decoded, avg, length $ takeWhile (== Left []) 
 
 demodulate :: [Double] -> [Bool]
 demodulate signal = case demodulate' signal of (xs, _, _) -> xs
-
-wrap :: Int -> [Bool] -> IO ()
-wrap i xs = mapM_ (putStrLn . map letter) $ chunksOf i xs
-  where
-    letter True  = '█'
-    letter False = ' '
-
-chunksOf :: Int -> [a] -> [[a]]
-chunksOf _ [] = []
-chunksOf i xs | (hs, ts) <- splitAt i xs = hs : chunksOf i ts
-
-guessWrap :: [Bool] -> Int
-guessWrap xs = length (takeWhile id xs) - 1
 
 emitSine
   :: Double -- ^ Wave frequency, full periods per sample
