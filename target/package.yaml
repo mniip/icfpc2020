@@ -1,0 +1,18 @@
+name:                icfpc2020-powder-target
+version:             0.1.0.0
+github:              "mniip/icfpc2020"
+
+
+dependencies:
+- base >= 4.7 && < 5
+- containers >= 0.6
+- http-conduit >= 2.3
+- utf8-string >= 1.0
+- bytestring >= 0.10
+
+executables:
+  main:
+    main:                Main.hs
+    source-dirs: .
+    other-modules: []
+    ghc-options: [-O2]

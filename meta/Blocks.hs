@@ -98,7 +98,7 @@ findBlocksIgnoringBorder :: [[Bool]] -> [Block Int]
 findBlocksIgnoringBorder grid
   = findBlocksIn (filter (`S.notMember` border) $ range ((0, 0), (width-1, height-1))) grid
   where
-    border = orthoConnectedComponent index (0, 0)
+    border = diagConnectedComponent index (0, 0)
 
     width = length $ head grid
     height = length grid
@@ -218,7 +218,7 @@ displayParsed grid
       putStrLn $ concatMap (\x -> str (x, y)) [0..width-1]
   where
     str (x, y) = case find (\b -> inRange (fst b) (x, y)) blocks of
-      Just (r, b) -> (if grid !! y !! x then "\x1B[101m" else "") ++ [(show' b ++ repeat ' ') !! index (swap *** swap $ r) (y, x)] ++ "\x1B[0m"
+      Just (r, b) -> (if grid !! y !! x then "\x1B[101m" else "") ++ [(show' b ++ repeat '░') !! index (swap *** swap $ r) (y, x)] ++ "\x1B[0m"
       Nothing     -> if grid !! y !! x then "█" else " "
 
     show' (BUnknownOp _ _ i) = ":" ++ show i

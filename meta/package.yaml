@@ -1,4 +1,4 @@
-name:                icfpc2020-powder
+name:                icfpc2020-powder-meta
 version:             0.1.0.0
 github:              "mniip/icfpc2020"
 
@@ -11,32 +11,27 @@ dependencies:
 - bytestring >= 0.10
 - binary >= 0.8
 - split >= 0.2
+- transformers >= 0.5
 
 library:
   source-dirs: .
 
 executables:
-  main:
-    main:                Main.hs
-    source-dirs: app
-    other-modules: []
-    dependencies: [icfpc2020-powder]
-    ghc-options: [-O2]
   encode:
     main:                Encode.hs
     source-dirs: app
     other-modules: []
-    dependencies: [icfpc2020-powder]
+    dependencies: [icfpc2020-powder-meta]
     ghc-options: [-O2]
   decode:
     main:                Decode.hs
     source-dirs: app
     other-modules: []
-    dependencies: [icfpc2020-powder]
+    dependencies: [icfpc2020-powder-meta]
     ghc-options: [-O2]
   cleanse:
     main:                Cleanse.hs
     source-dirs: app
     other-modules: []
-    dependencies: [icfpc2020-powder]
+    dependencies: [icfpc2020-powder-meta]
     ghc-options: [-O2]
