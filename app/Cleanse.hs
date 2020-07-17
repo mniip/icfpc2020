@@ -1,3 +1,3 @@
 import Modem
 
-main = writePCM "/dev/stdout" . smooth . map abs . cleanse =<< readWAV "/dev/stdin"
+main = writePCM "/dev/stdout" . map abs . cleanse =<< readWAV "/dev/stdin"
