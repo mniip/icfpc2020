@@ -139,16 +139,45 @@ data BlockType
   | BMul
   | BDiv
   | BBEq -- ^ Boolean equality
-  | BTrue
-  | BFalse
+  | BTrue -- ^ \t f -> t
+  | BFalse -- ^ \t f -> f
   | BLt
   | BMod -- ^ Modulate
   | BDem -- ^ Demodulate
   | BEval -- ^ Unknown lambda looking symbol
   | BLineNum Integer
+  | BNeg
+  | BS -- ^ \f g x -> f x (g x)
+  | BFlip -- ^ \f x y -> f y x
+  | BComp -- ^ \f g x -> f (g x)
+  | BPow2 -- ^ f = ((flip (eq 0)) 1) <*> (((.) ((*) 2)) (((.) f) ((+) (-1))))
+  | BId -- ^ \x -> x
+  | BPair -- ^ \x y z -> z x y
+  | BFst -- ^  \x -> x True
+  | BSnd -- ^  \x -> x False
+  | BNil -- ^ const True
+  | BIsNil -- ^ (?) isNil Nil = True; isNil (Pair x y) = False
+  | BListOpen
+  | BListComma
+  | BListClose -- ^ Open x Comma y Comma z Close = Pair x (Pair y (Pair z Nil))
+  | BPoint -- ^ Point x y = Pair x y
+  | BImage -- ^ Creates a 17x17(?) image from a list of pixels
+  | BChecker -- ^ \a b -> Image with checkerboard pattern (TODO pixmap33)
+  | BMapImage -- ^ mapImage Nil = Nil; mapImage (Pair x xs) = Pair (Image x) (mapImage xs)
+  | BChoose -- ^ \case { 0 -> True; 1 -> False }
   | BUnknownOp Int Int Natural
   | BUnknown Int Int Natural
   deriving (Eq, Ord, Show)
+
+-- :15 :
+-- f (\a b c -> b) = \x y -> x
+-- f (\p -> p x0 x1) = \x y -> y
+-- f h = f (const (const False)) True {- ??? -}
+-- TODO : pixmap33 (checker?)
+
+-- pixmap35: mod Nil, mod Pair
+-- pixmap36: eval [0] = [1, X]
+-- 
 
 numValue :: [[Bool]] -> Natural
 numValue = go 0 0 . concat
@@ -192,9 +221,16 @@ parseBlock xs
   , and (head xs) && all head xs
   = case (width - 1, height - 1, numValue $ tail <$> tail xs) of
       (1, 1, 0   ) -> BAp
+      (1, 1, 1   ) -> BId
       (2, 2, 2   ) -> BTrue
+      (2, 2, 5   ) -> BComp
+      (2, 2, 6   ) -> BFlip
+      (2, 2, 7   ) -> BS
       (2, 2, 8   ) -> BFalse
+      (2, 2, 10  ) -> BNeg
       (2, 2, 12  ) -> BEq
+      (2, 2, 14  ) -> BNil
+      (2, 2, 15  ) -> BIsNil
       (3, 3, 40  ) -> BDiv
       (3, 3, 146 ) -> BMul
       (3, 3, 170 ) -> BMod
@@ -205,9 +241,22 @@ parseBlock xs
       (3, 3, 416 ) -> BLt
       (3, 3, 417 ) -> BSucc
       (3, 3, 448 ) -> BBEq
+      (4, 4, 58336) -> BChoose
+      (4, 4, 64170) -> BPair
+      (4, 4, 64174) -> BFst
+      (4, 4, 64171) -> BSnd
+      (5, 5, 17043521) -> BPoint
+      (5, 5, 33047056) -> BImage
+      (5, 5, 11184810) -> BChecker
+      (6, 6, 68191693600) -> BPow2
+      (6, 6, 68259412260) -> BMapImage
       (w, h, i   ) -> BUnknownOp w h i
   | otherwise
-  = BUnknown width height $ numValue xs
+  = case (width, height, numValue xs) of
+      (3, 5, 19956) -> BListOpen
+      (2, 5, 1023) -> BListComma
+      (3, 5, 6105) -> BListClose
+      (w, h, i   ) -> BUnknown w h i
   where
     width = length $ head xs
     height = length xs
