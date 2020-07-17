@@ -8,6 +8,7 @@ import Data.Bits
 import Control.Arrow
 import Control.Applicative
 import Control.Monad
+import Data.Function (on)
 import Data.Ix
 import Data.List.Split
 import qualified Data.Set as S
@@ -228,6 +229,15 @@ displayParsed grid
     show' b = tail $ show b
 
     blocks = map (\r -> (r, parseBlock $ selectBlock r grid)) $ findBlocksIgnoringBorder grid
+
+    width = length $ head grid
+    height = length grid
+
+picToText :: [[Bool]] -> [[BlockType]]
+picToText grid = map (map snd) blockLines
+  where
+    blockLines = groupBy ((==) `on` fst) . sortBy (compare `on` fst) $ blocks
+    blocks = map (\r -> (snd $ fst r, parseBlock $ selectBlock r grid)) $ findBlocksIgnoringBorder grid
 
     width = length $ head grid
     height = length grid
