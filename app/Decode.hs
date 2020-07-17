@@ -1,3 +1,4 @@
 import Modem
+import Blocks
 
-main = (wrap =<< guessWrap) =<< demodulate <$> readWAV "/dev/stdin"
+main = display . wrap =<< demodulate <$> readWAV "/dev/stdin"
