@@ -165,6 +165,52 @@ lineDecode xs = case runStateT go xs of
     bit = StateT uncons
     expect b = bit >>= \x -> if x == b then pure () else StateT mempty
 
+intToLine :: Integer -> [Bool]                                                       
+intToLine n = (if n >= 0 then [False, True] else [True, False])                      
+  ++ replicate len True                                                         
+  ++ [False]                                                                    
+  ++ map (testBit absn) (reverse [0 .. 4*len-1])                                
+  where                                                                         
+    absn = abs n                                                                
+    len = head $ dropWhile (\l -> 16^l <= absn) [0..]
+
+-- Cons list
+data NumList = NilL | NumL Integer | Cons NumList NumList deriving (Show)
+
+listToLine :: NumList -> [Bool]
+listToLine NilL = [False, False]
+listToLine (NumL n) = intToLine n
+listToLine (Cons a b) = [True, True] ++ listToLine a ++ listToLine b
+
+lineToList :: [Bool] -> Maybe NumList
+lineToList xs = case runStateT listState xs of
+  Just (r, []) -> pure r
+  _            -> empty
+
+listState :: StateT [Bool] Maybe NumList
+listState = do
+    b1 <- bit
+    b2 <- bit
+    case (b1, b2) of
+      (False, False) -> return NilL
+      (True, True) -> do
+          left <- listState
+          right <- listState
+          return (Cons left right)
+      _ -> do
+          num <- nm b1
+          return (NumL num)
+  where
+    nm :: Bool -> StateT [Bool] Maybe Integer
+    nm sign =
+        do let getLen = bit >>= \b -> if b then succ <$> getLen else pure 0
+           len <- getLen
+           ((if sign then -1 else 1) *)
+             <$> foldl' (\x y -> 2*x + if y then 1 else 0) 0
+             <$> replicateM (4*len) bit
+    bit = StateT uncons
+    expect b = bit >>= \x -> if x == b then pure () else StateT mempty
+
 parseBlock :: [[Bool]] -> BlockType
 parseBlock xs
   | width == height
