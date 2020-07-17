@@ -89,3 +89,8 @@ smallStep rs = go
     go (EAp f x) = ((`EAp` x) <$> go f) <|> ((f `EAp`) <$> go x)
     go (ELam v e) = ELam v <$> go e
     go _ = empty
+
+reduce :: (Eq a, Ord m, Ord v) => [Rule a m v] -> Expr a v -> Expr a v
+reduce rs e = case smallStep rs e of
+  Just e' -> reduce rs e'
+  _       -> e

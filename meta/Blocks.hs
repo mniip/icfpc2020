@@ -1,10 +1,11 @@
-{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE BangPatterns, LambdaCase #-}
 module Blocks where
 
 import Control.Monad.Trans.State
 import Data.Tuple
 import Data.List
 import Data.Bits
+import Data.Functor
 import Control.Arrow
 import Control.Applicative
 import Control.Monad
@@ -14,6 +15,7 @@ import Data.List.Split
 import qualified Data.Set as S
 import Numeric.Natural
 
+import Calculus
 import Language
 
 wrap :: [Bool] -> [[Bool]]
@@ -300,3 +302,33 @@ picToText grid = map (map snd) blockLines
 
     width = length $ head grid
     height = length grid
+
+type Parser = StateT [BlockType] Maybe
+
+char :: Parser BlockType
+char = StateT uncons
+
+end :: Parser ()
+end = StateT $ \case
+  [] -> pure ((), [])
+  _  -> empty
+
+exact :: BlockType -> Parser BlockType
+exact t = mfilter (== t) char
+
+pExpr :: Parser (MetaExpr Atom Integer v)
+pExpr = char >>= \case
+  BAtom atom -> pure $ EAtom atom
+  BAp -> EAp <$> pExpr <*> pExpr
+  BVar i -> pure $ EMVar i
+  BListOpen -> (EAtom (Comb Nil) <$ exact BListClose) <|> pList
+  _ -> empty
+
+pList :: Parser (MetaExpr Atom Integer v)
+pList = EAp <$> (EAp (EAtom (Comb Pair)) <$> pExpr) <*> ((exact BListComma *> pList) <|> (EAtom (Comb Nil) <$ exact BListClose))
+
+pEquation :: Parser (MetaExpr Atom Integer v, MetaExpr Atom Integer v)
+pEquation = (,) <$> pExpr <* exact BEq <*> pExpr
+
+parseEquation :: [BlockType] -> Maybe (MetaExpr Atom Integer v, MetaExpr Atom Integer v)
+parseEquation = evalStateT (pEquation <* end)
