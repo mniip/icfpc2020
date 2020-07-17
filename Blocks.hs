@@ -194,7 +194,7 @@ displayParsed grid
       putStrLn $ concatMap (\x -> str (x, y)) [0..width-1]
   where
     str (x, y) = case find (\b -> inRange (fst b) (x, y)) blocks of
-      Just (r, b) -> (if grid !! y !! x then "\x1B[101m" else "\x1B[31m") ++ [show' b !! index (swap *** swap $ r) (y, x)] ++ "\x1B[0m"
+      Just (r, b) -> (if grid !! y !! x then "\x1B[101m" else "") ++ [show' b !! index (swap *** swap $ r) (y, x)] ++ "\x1B[0m"
       Nothing     -> if grid !! y !! x then "█" else " "
 
     show' (BUnknownOp _ _ i) = ":" ++ show i ++ repeat ' '

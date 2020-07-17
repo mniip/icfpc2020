@@ -54,6 +54,12 @@ trigTransformChunks freqs signal size = go 0 signal
         memo = (\i -> trigTransform (freqs i) size current (fromRational finetune))
           <$> [minBound..maxBound]
 
+getPixmap :: Get [Bool]
+getPixmap = many $ (/= 0) <$> getWord8
+
+readPixmap :: String -> IO [Bool]
+readPixmap filename = runGet getPixmap <$> LBS.readFile filename
+
 getPCM :: Get [Double]
 getPCM = many $ (\sample -> fromIntegral sample / 0x8000) <$> getInt16le
 
