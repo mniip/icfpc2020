@@ -2,9 +2,9 @@
 #include <vector>
 #include <SDL2/SDL.h>
 
-#define XRES 200
-#define YRES 200
-#define SCALE 5
+#define XRES 300
+#define YRES 300
+#define SCALE 1
 
 int main(int argc, char ** argv)
 {
@@ -60,6 +60,7 @@ int main(int argc, char ** argv)
 			case 'I':
 			{
 				click = false;
+				current_pic = 0;
 				while (!quit && !click)
 				{
 					SDL_UpdateTexture(texture, NULL, pixelsList[current_pic], XRES * sizeof(Uint32));
@@ -73,8 +74,8 @@ int main(int argc, char ** argv)
 							break;
 						case SDL_MOUSEBUTTONDOWN:
 						{
-							int mouseX = event.motion.x/SCALE;
-							int mouseY = event.motion.y/SCALE;
+							int mouseX = ((int)event.motion.x)/SCALE;
+							int mouseY = ((int)event.motion.y)/SCALE;
 
 							std::cout << mouseX+coordList[current_pic].first << " "
 							          << mouseY+coordList[current_pic].second << std::endl;
