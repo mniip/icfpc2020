@@ -144,20 +144,22 @@ picsMVar :: MVar [UArray (Int, Int) Bool]
 picsMVar = unsafePerformIO newEmptyMVar
 
 uiThread :: IO ()
-uiThread = playIO FullScreen black 25 [] (pure . drawArrs) events timestep
+uiThread = playIO FullScreen black 25 (5, []) (pure . drawArrs) events timestep
   where
-    drawArrs arrs = Scale scale scale $ Pictures $ zipWith Color (cycle $ withAlpha 0.5 <$> [red, green, blue, yellow, cyan, magenta, rose, violet, azure, aquamarine, chartreuse, orange]) (drawArr <$> arrs)
+    drawArrs (scale, arrs) = Scale scale scale $ Pictures $
+                             zipWith Color (cycle $ withAlpha 0.5 <$>
+                             [red, green, blue, yellow, cyan, magenta, rose, violet, azure, aquamarine, chartreuse, orange]) (drawArr <$> arrs)
     drawArr :: UArray (Int, Int) Bool -> Picture
     drawArr arr = Pictures [Translate (fromIntegral i) (fromIntegral (-j)) $ Polygon $ rectanglePath 1 1 | i <- [minx..maxx], j <- [miny..maxy], arr ! (i, j)]
       where ((minx, miny), (maxx, maxy)) = bounds arr
 
-    events (EventKey (MouseButton LeftButton) Down _ (x, y)) world = do
+    events (EventKey (MouseButton LeftButton) Down _ (x, y)) (scale, world) = do
       putMVar clicksMVar (floor $ x / scale + 0.5, floor $ -y / scale + 0.5)
-      pure world
+      pure (scale, world)
+    events (EventKey (SpecialKey KeyDown) Down _ _) (scale, world) = pure (max 0 (scale-1), world)
+    events (EventKey (SpecialKey KeyUp) Down _ _) (scale, world) = pure (min 7 (scale+1), world)
     events _ world = pure world
 
-    timestep _ world = tryTakeMVar picsMVar >>= \case
-      Just world' -> pure world'
-      _           -> pure world
-
-    scale = 7
+    timestep _ (scale, world) = tryTakeMVar picsMVar >>= \case
+      Just world' -> pure (scale, world')
+      _           -> pure (scale, world)
