@@ -1,6 +1,9 @@
 {-# LANGUAGE LambdaCase #-}
 module VM where
 
+import System.IO
+import Network.HTTP.Simple
+import qualified Data.ByteString.Lazy.UTF8 as BLU
 import Control.Arrow
 import Data.Maybe
 import Control.Monad.Trans.State
@@ -271,9 +274,9 @@ whnfUglyPrint glob clos = do
     ClosureImage image | 
         let ((minx, miny), (maxx, maxy)) = bounds image
         -> do
-            putStrLn "P"
-            putStrLn (show minx ++ " " ++ show miny ++ " " ++ show maxx ++ " " ++ show maxy)
-            putStrLn $ map (\b -> if b then '1' else '0') $ elems image
+            hPutStrLn stderr "P"
+            hPutStrLn stderr (show minx ++ " " ++ show miny ++ " " ++ show maxx ++ " " ++ show maxy)
+            hPutStrLn stderr $ map (\b -> if b then '1' else '0') $ elems image
     _ -> return ()
 
 mkGlobals :: IO Globals
@@ -353,13 +356,21 @@ mkGlobals = do
       print =<< whnfIntList glob x
       clos <- newThunk $ EntryGlobal modOpNum `EntryApply` EntryValue x
       whnfPpr glob clos >> putStrLn ""
-      putStrLn "Eval In:"
-      line <- map (== '1') <$> getLine
-      input <- newClosure $ ClosureBits $ listArray (0, length line - 1) line
-      result <- newThunk $ EntryGlobal demOpNum `EntryApply` EntryValue input
-      print =<< whnfIntList glob result
-      updateClosure self =<< readClosure result
-      whnf glob self
+      readClosure clos >>= \case
+        ClosureBits bits -> do
+          request' <- parseRequest ("POST https://icfpc2020-api.testkontur.ru/aliens/send?apiKey=5b1e7596cd5446e18dd969e5fcede90b")
+          let request = setRequestBodyLBS (BLU.fromString $ map (\b -> if b then '1' else '0') $ elems bits) request'
+          response <- httpLBS request
+          putStrLn "Eval In:"
+          case show (getResponseStatusCode response) of
+            "200" -> do
+              let line = map (=='1') $ BLU.toString $ getResponseBody response
+              input <- newClosure $ ClosureBits $ listArray (0, length line - 1) line
+              result <- newThunk $ EntryGlobal demOpNum `EntryApply` EntryValue input
+              print =<< whnfIntList glob result
+              updateClosure self =<< readClosure result
+              whnf glob self
+            _ -> error "server error"
     builtinEval _ args _ = error $ "Expected 1 argument, got " ++ show (length args)
     builtinDem glob [x] self = do
       whnf glob x

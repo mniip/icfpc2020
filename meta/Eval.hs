@@ -2,6 +2,11 @@
 
 module Eval where
 
+import Graphics.Gloss.Interface.IO.Interact
+import Control.Concurrent.MVar
+import System.IO.Unsafe
+import Data.Array.Unboxed
+import System.IO
 import Numeric.Natural
 import Control.Monad.Trans.State
 import Control.Monad
@@ -104,22 +109,53 @@ run globals str = catch (runStmt globals $ parseLine str) (\e -> print (e :: Som
 interaction :: IORef Globals -> Natural -> IO ()
 interaction globals name = do
   glob <- readIORef globals
-  zero <- newInt 0
-  clos <- newThunk $ EntryGlobal interactOpNum `EntryApply` EntryGlobal name `EntryApply` EntryGlobal nilOpNum `EntryApply` (EntryGlobal pairOpNum `EntryApply` EntryValue zero `EntryApply` EntryValue zero)
+  (x, y) <- pure (0, 0)
+  cx <- newInt x
+  cy <- newInt y
+  clos <- newThunk $ EntryGlobal interactOpNum `EntryApply` EntryGlobal name `EntryApply` EntryGlobal 123456 `EntryApply` (EntryGlobal pairOpNum `EntryApply` EntryValue cx `EntryApply` EntryValue cy)
   go glob clos
   where
     go glob clos = do
       (state:drawings:_) <- whnfList glob clos
-      mapM_ (whnfUglyPrint glob) =<< whnfList glob drawings
-      putStrLn "I"
-      hFlush stdout
-      [x, y] <- map read . words <$> getLine
+      pics <- mapM (getPic glob) =<< whnfList glob drawings
+      whnfPpr glob state
+      putMVar picsMVar pics
+      --mapM_ (whnfPpr glob) =<< whnfList glob drawings
+      (x, y) <- takeMVar clicksMVar
       cx <- newInt x
       cy <- newInt y
       clos' <- newThunk $ EntryGlobal interactOpNum `EntryApply` EntryGlobal name `EntryApply` EntryValue state `EntryApply` (EntryGlobal pairOpNum `EntryApply` EntryValue cx `EntryApply` EntryValue cy)
       go glob clos'
 
+    getPic glob clos = do
+      whnf glob clos
+      readClosure clos >>= \case
+        ClosureImage pic -> pure pic
+
 runProgram :: [String] -> IO ()
 runProgram strs = do
     globals <- (newIORef =<< mkGlobals)
     mapM_ (run globals) strs
+
+clicksMVar :: MVar (Integer, Integer)
+clicksMVar = unsafePerformIO newEmptyMVar
+
+picsMVar :: MVar [UArray (Int, Int) Bool]
+picsMVar = unsafePerformIO newEmptyMVar
+
+uiThread :: IO ()
+uiThread = interactIO FullScreen black [] (pure . drawArrs) events (\_ -> pure ())
+  where
+    drawArrs arrs = Scale scale scale $ Pictures $ zipWith Color (cycle $ withAlpha 0.5 <$> [red, green, blue, yellow, cyan, magenta, rose, violet, azure, aquamarine, chartreuse, orange]) (drawArr <$> arrs)
+    drawArr :: UArray (Int, Int) Bool -> Picture
+    drawArr arr = Pictures [Translate (fromIntegral i) (fromIntegral (-j)) $ Polygon $ rectanglePath 1 1 | i <- [minx..maxx], j <- [miny..maxy], arr ! (i, j)]
+      where ((minx, miny), (maxx, maxy)) = bounds arr
+
+    events (EventKey (MouseButton LeftButton) Down _ (x, y)) world = do
+      putMVar clicksMVar (floor $ x / scale, floor $ -y / scale)
+      pure world
+    events _ world = tryTakeMVar picsMVar >>= \case
+      Just world' -> pure world'
+      _           -> pure world
+
+    scale = 10
