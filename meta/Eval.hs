@@ -157,7 +157,7 @@ uiThread = playIO FullScreen black 25 (5, []) (pure . drawArrs) events timestep
       putMVar clicksMVar (floor $ x / scale + 0.5, floor $ -y / scale + 0.5)
       pure (scale, world)
     events (EventKey (SpecialKey KeyDown) Down _ _) (scale, world) = pure (max 0 (scale-1), world)
-    events (EventKey (SpecialKey KeyUp) Down _ _) (scale, world) = pure (min 7 (scale+1), world)
+    events (EventKey (SpecialKey KeyUp) Down _ _) (scale, world) = pure (scale+1, world)
     events _ world = pure world
 
     timestep _ (scale, world) = tryTakeMVar picsMVar >>= \case
