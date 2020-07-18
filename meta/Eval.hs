@@ -11,18 +11,18 @@ import Data.Char
 import Data.Maybe
 import Data.IORef
 import Control.Exception
-import System.IO.Unsafe
 
 import Constants
 import VM
 
-data Token = TEq | TAp | TName Natural | TNum Integer
+data Token = TEq | TAp | TName Natural | TNum Integer | TVar Natural
   deriving (Eq, Ord, Show)
 
 data Expr
   = ENum Integer
   | EGlob Natural
   | Expr :$ Expr
+  | EVar Natural
   deriving (Eq, Ord, Show)
 infixl 1 :$
 
@@ -30,6 +30,7 @@ tokenize :: String -> [Token]
 tokenize = map mkToken . words
   where
     mkToken num | all isNum num = TNum $ read num
+    mkToken ('x':num) | all isNum num = TVar $ read num
     mkToken (':':num) | all isNum num = mkName $ read num
     mkToken name = mkName $ fromMaybe (error $ "Unknown " ++ name) $ fromPegovkaOpNum name
 
@@ -40,7 +41,7 @@ tokenize = map mkToken . words
     isNum c = isDigit c || c == '-'
 
 data ReplStmt
-  = Decl Natural Expr
+  = Decl Natural [Natural] Expr
   | Whnf Expr
   deriving (Eq, Ord, Show)
 
@@ -53,15 +54,20 @@ parseLine = fromMaybe (error "no parse") . evalStateT (pLine <* pEnd) . tokenize
 
     pLine = pDecl <|> (Whnf <$> pExpr)
 
-    pDecl = Decl <$> pName <* exact TEq <*> pExpr
-
-    pName = token >>= \case
-      TName n -> pure n
-      _       -> empty
+    pDecl = do
+      lhs <- pExpr
+      let (name, bndr) = go [] lhs
+      void $ exact TEq
+      rhs <- pExpr
+      pure $ Decl name bndr rhs
+      where go vs (e :$ EVar v) = go (v:vs) e
+            go vs (EGlob name) = (name, vs)
+            go _ _ = error "expected a binder"
 
     pExpr = token >>= \case
       TAp       -> (:$) <$> pExpr <*> pExpr
       TNum num  -> pure $ ENum num
+      TVar num  -> pure $ EVar num
       TName num -> pure $ EGlob num
       _         -> empty
 
@@ -69,24 +75,25 @@ parseLine = fromMaybe (error "no parse") . evalStateT (pLine <* pEnd) . tokenize
     satisfies p = mfilter p token
     exact t = satisfies (== t)
 
-compile :: Expr -> IO Closure
-compile (ENum i) = newInt i
-compile e = newThunk =<< compileEntry e
+compile :: [Natural] -> Expr -> IO Closure
+compile bndrs e = newFun (length bndrs) =<< compileEntry e
   where
     compileEntry (EGlob i) = pure $ EntryGlobal i
     compileEntry (f :$ x) = EntryApply <$> compileEntry f <*> compileEntry x
-    compileEntry expr = do
-      EntryValue <$> compile expr
+    compileEntry (ENum i) = EntryValue <$> newInt i
+    compileEntry (EVar v) = case elemIndex v bndrs of
+      Just i -> pure $ EntryArg i
+      Nothing -> error $ "Unbound variable " ++ show v
 
 runStmt :: IORef Globals -> ReplStmt -> IO ()
-runStmt globals (Decl num expr) = do
+runStmt globals (Decl name bndr expr) = do
   glob <- readIORef globals
-  clos <- compile expr
-  glob' <- addGlobal glob num clos
+  clos <- compile bndr expr
+  glob' <- addGlobal glob name clos
   writeIORef globals glob'
 runStmt globals (Whnf expr) = do
   glob <- readIORef globals
-  clos <- compile expr
+  clos <- compile [] expr
   whnfPpr glob clos
   putStrLn ""
 
