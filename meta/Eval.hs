@@ -100,6 +100,22 @@ runStmt globals (Whnf expr) = do
 run :: IORef Globals -> String -> IO ()
 run globals str = catch (runStmt globals $ parseLine str) (\e -> print (e :: SomeException))
 
+interact :: IORef Globals -> Natural -> IO ()
+interact globals name = do
+  glob <- readIORef globals
+  zero <- newInt 0
+  clos <- newThunk $ EntryGlobal interactOpNum `EntryApply` EntryGlobal name `EntryApply` EntryGlobal nilOpNum `EntryApply` (EntryGlobal pairOpNum `EntryApply` EntryValue zero `EntryApply` EntryValue zero)
+  go glob clos
+  where
+    go glob clos = do
+      (state:drawings:_) <- whnfList glob clos
+      mapM_ (whnfPpr glob) =<< whnfList glob drawings
+      [x, y] <- map read . words <$> getLine
+      cx <- newInt x
+      cy <- newInt y
+      clos' <- newThunk $ EntryGlobal interactOpNum `EntryApply` EntryGlobal name `EntryApply` EntryValue state `EntryApply` (EntryGlobal pairOpNum `EntryApply` EntryValue cx `EntryApply` EntryValue cy)
+      go glob clos'
+
 runProgram :: [String] -> IO ()
 runProgram strs = do
     globals <- (newIORef =<< mkGlobals)

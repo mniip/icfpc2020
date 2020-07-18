@@ -39,6 +39,9 @@ pow2OpNum = 68191693600
 mapImageOpNum = 68259412260
 
 galaxyOpNum = 123229502148636
+swastOpNum = 33185746
+interactOpNum = 33053392
+statelessdrawOpNum = 33554448
 
 fromPegovkaOpNum :: String -> Maybe Natural
 fromPegovkaOpNum = \case
@@ -57,14 +60,14 @@ fromPegovkaOpNum = \case
   "div" -> Just divOpNum
   "mul" -> Just mulOpNum
   "mod" -> Just modOpNum
-  "eval" -> Just evalOpNum
+  "send" -> Just evalOpNum
   "dem" -> Just demOpNum
   "add" -> Just addOpNum
   "pred" -> Just predOpNum
   "lt" -> Just ltOpNum
   "succ" -> Just succOpNum
   "eq" -> Just bEqOpNum
-  "choose" -> Just chooseOpNum
+  "ifzero" -> Just chooseOpNum
   "cons" -> Just pairOpNum
   "car" -> Just fstOpNum
   "cdr" -> Just sndOpNum
@@ -73,8 +76,11 @@ fromPegovkaOpNum = \case
   "draw" -> Just imageOpNum
   "checkerboard" -> Just checkerOpNum
   "pwr2" -> Just pow2OpNum
-  "mapImage" -> Just mapImageOpNum
+  "multipledraw" -> Just mapImageOpNum
 
   "galaxy" -> Just galaxyOpNum
+  "swast" -> Just swastOpNum
+  "interact" -> Just interactOpNum
+  "statelessdraw" -> Just statelessdrawOpNum
 
   _ -> Nothing

@@ -1,6 +1,7 @@
 {-# LANGUAGE LambdaCase #-}
 module VM where
 
+import Control.Arrow
 import Data.Maybe
 import Control.Monad.Trans.State
 import Control.Applicative
@@ -94,7 +95,11 @@ enterUpdate glob args (EntryApply fun arg) self = do
       updateClosure self $ ClosureFun (funarity - 1) (argclos:funargs) entry
       whnf glob self
     cd -> error $ "Expected function, got " ++ pprClosureData cd
-enterUpdate glob args (EntryBuiltin f) self = f glob args self
+enterUpdate glob args (EntryBuiltin f) self = do
+  f glob args self
+  isWhnf <$> readClosure self >>= \case
+    True -> pure ()
+    False -> error "builtin did not whnf"
 
 pprClosureData :: ClosureData -> String
 pprClosureData (ClosureInt i) = show i
@@ -282,7 +287,7 @@ mkGlobals = do
   sndClos <- newFun 1 $ EntryArg 0 `EntryApply` EntryGlobal falseOpNum
   let pointClos = pairClos
   imageClos <- newFun 1 $ EntryBuiltin builtinImage
-  mapImageOpNum <- newFun 1 $ EntryGlobal isNilOpNum `EntryApply` EntryArg 0 `EntryApply` EntryGlobal nilOpNum `EntryApply` (EntryGlobal pairOpNum `EntryApply` (EntryGlobal imageOpNum `EntryApply` (EntryGlobal fstOpNum `EntryApply` EntryArg 0)) `EntryApply` (EntryGlobal mapImageOpNum `EntryApply` (EntryGlobal sndOpNum `EntryApply` EntryArg 0)))
+  mapImageClos <- newFun 1 $ EntryGlobal isNilOpNum `EntryApply` EntryArg 0 `EntryApply` EntryGlobal nilOpNum `EntryApply` (EntryGlobal pairOpNum `EntryApply` (EntryGlobal imageOpNum `EntryApply` (EntryGlobal fstOpNum `EntryApply` EntryArg 0)) `EntryApply` (EntryGlobal mapImageOpNum `EntryApply` (EntryGlobal sndOpNum `EntryApply` EntryArg 0)))
   pure $ Globals $ HM.fromList
     [ (idOpNum, idClos)
     , (trueOpNum, trueClos)
@@ -309,6 +314,7 @@ mkGlobals = do
     , (sndOpNum, sndClos)
     , (pointOpNum, pointClos)
     , (imageOpNum, imageClos)
+    , (mapImageOpNum, mapImageClos)
     ]
   where
     builtinMod glob [x] self = do
@@ -334,6 +340,7 @@ mkGlobals = do
         ClosureBits bits -> do
           clos <- newIntList $ fromMaybe (error "Demodulate parse error") $ evalStateT (go <* end) $ elems bits
           updateClosure self =<< readClosure clos
+          whnf glob self
         cd               -> error $ "Expected bits, got " ++ pprClosureData cd
       where
         bit = StateT uncons
@@ -352,8 +359,11 @@ mkGlobals = do
     builtinDem _ args _ = error $ "Expected 1 argument, got " ++ show (length args)
     builtinImage glob [x] self = do
       coords <- mapM (whnfCoords glob <=< whnfPair glob) =<< whnfList glob x
-      let w = 17; h = 13; r = ((0, 0), (w-1, h-1))
-      let contents = [(toInteger x, toInteger y) `elem` coords | (x, y) <- range r]
+      -- TODO : proper padding
+      let dx = minimum $ fst <$> (0, 0) : coords; dy = minimum $ snd <$> (0, 0) : coords
+      let coords' = map (subtract dx *** subtract dy) coords
+      let w = fromInteger $ maximum $ fst <$> (0, 0) : coords'; h = fromInteger $ maximum $ snd <$> (0, 0) : coords'; r = ((0, 0), (w, h))
+      let contents = [(toInteger x, toInteger y) `elem` coords' | (x, y) <- range r]
       updateClosure self $ ClosureImage $ listArray r contents
       where whnfCoords glob (x, y) = (,) <$> whnfInteger glob x <*> whnfInteger glob y
 
