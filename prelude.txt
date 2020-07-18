@@ -1,0 +1,5 @@
+checkerboard = ap ap s ap ap b s ap ap c ap ap b c ap ap b ap c ap c ap ap s ap ap b s ap ap b ap b ap ap s i i lt eq ap ap s mul i nil ap ap s ap ap b s ap ap b ap b cons ap ap s ap ap b s ap ap b ap b cons ap c div ap c ap ap s ap ap b b ap ap c ap ap b b add neg ap ap b ap s mul div ap ap c ap ap b b checkerboard ap ap c add 2
+ap modem x0 = ap dem ap mod x0
+ap ap swast x2 x0 = ap ap ap ifzero ap car x0 ap ap cons ap modem ap car ap cdr x0 ap ap cons ap multipledraw ap car ap cdr ap cdr x0 nil ap ap ap interact x2 ap modem ap car ap cdr x0 ap send ap car ap cdr ap cdr x0
+ap ap ap interact x2 x4 x3 = ap ap swast x2 ap ap x2 x4 x3
+statelessdraw = ap ap c ap ap b b ap ap b ap b ap cons 0 ap ap c ap ap b b cons ap ap c cons nil ap ap c ap ap b cons ap ap c cons nil nil
