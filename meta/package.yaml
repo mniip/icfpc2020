@@ -35,3 +35,9 @@ executables:
     other-modules: []
     dependencies: [icfpc2020-powder-meta]
     ghc-options: [-O2]
+  run:
+    main:                Run.hs
+    source-dirs: app
+    other-modules: []
+    dependencies: [icfpc2020-powder-meta]
+    ghc-options: [-O2]
