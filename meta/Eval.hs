@@ -118,7 +118,7 @@ interaction globals name = do
     go glob clos = do
       (state:drawings:_) <- whnfList glob clos
       pics <- mapM (getPic glob) =<< whnfList glob drawings
-      whnfPpr glob state
+      whnfPpr glob state >> putStrLn ""
       putMVar picsMVar pics
       --mapM_ (whnfPpr glob) =<< whnfList glob drawings
       (x, y) <- takeMVar clicksMVar

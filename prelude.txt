@@ -4,4 +4,4 @@ ap ap swast x2 x0 = ap ap ap ifzero ap car x0 ap ap cons ap modem ap car ap cdr 
 ap ap ap interact x2 x4 x3 = ap ap swast x2 ap ap x2 x4 x3
 statelessdraw = ap ap c ap ap b b ap ap b ap b ap cons 0 ap ap c ap ap b b cons ap ap c cons nil ap ap c ap ap b cons ap ap c cons nil nil
 pwr2   =   ap ap s ap ap c ap eq 0 1 ap ap b ap mul 2 ap ap b pwr2 ap add -1
-:123456 = ap ap cons 2 ap ap cons ap ap cons 1 ap ap cons -1 nil ap ap cons 0 ap ap cons ap ap cons 103652820 nil nil
+:123456 = ap ap cons 5 ap ap cons ap ap cons 2 ap ap cons 0 ap ap cons nil ap ap cons nil ap ap cons nil ap ap cons nil ap ap cons nil ap ap cons 53596 nil ap ap cons 9 ap ap cons nil nil
