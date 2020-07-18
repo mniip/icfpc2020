@@ -2,6 +2,7 @@
 module VM where
 
 import Control.Monad
+import Data.Bits
 import Control.Exception
 import Data.IORef
 import Data.Array.Unboxed
@@ -207,7 +208,7 @@ whnfPpr glob clos = do
   whnf glob clos
   readClosure clos >>= \case
     ClosureInt i -> putStr $ show i
-    ClosureBits bits -> putStr $ "[" ++ map (\b -> if b then '0' else '1') (elems bits) ++ "]"
+    ClosureBits bits -> putStr $ "[" ++ map (\b -> if b then '▀' else '▄') (elems bits) ++ "]"
     ClosureImage image | let (_, (w, h)) = bounds image
       -> do putStrLn ""
             forM_ [0..w] $ \y -> do
@@ -282,6 +283,7 @@ mkGlobals = do
     , (mulOpNum, mulClos)
     , (modOpNum, modClos)
     , (evalOpNum, evalClos)
+    , (demOpNum, demClos)
     , (addOpNum, addClos)
     , (predOpNum, predClos)
     , (ltOpNum, ltClos)
@@ -292,9 +294,23 @@ mkGlobals = do
     , (fstOpNum, fstClos)
     , (sndOpNum, sndClos)
     , (pointOpNum, pointClos)
+    , (imageOpNum, imageClos)
     ]
   where
-    builtinMod glob [x] self = undefined
+    builtinMod glob [x] self = do
+      list <- whnfIntList glob x
+      let bits = go list
+      updateClosure self $ ClosureBits $ listArray (0, length bits - 1) bits
+      where
+        go (LInt n)     = (if n >= 0 then [False, True] else [True, False])
+                          ++ replicate len True
+                          ++ [False]
+                          ++ map (testBit absn) (reverse [0 .. 4*len-1])
+                          where
+                            absn = abs n
+                            len = head $ dropWhile (\l -> 16^l <= absn) [0..]
+        go LNil         = [False, False]
+        go (LCons x xs) = [True, True] ++ go x ++ go xs
     builtinMod _ args _ = error $ "Expected 1 argument, got " ++ show (length args)
     builtinEval glob [x] self = undefined
     builtinEval _ args _ = error $ "Expected 1 argument, got " ++ show (length args)

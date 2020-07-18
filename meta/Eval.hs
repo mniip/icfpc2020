@@ -42,10 +42,15 @@ tokenize = map mkToken . words
 data ReplStmt
   = Decl Natural Expr
   | Whnf Expr
+  deriving (Eq, Ord, Show)
 
 parseLine :: String -> ReplStmt
-parseLine = fromMaybe (error "no parse") . evalStateT pLine . tokenize
+parseLine = fromMaybe (error "no parse") . evalStateT (pLine <* pEnd) . tokenize
   where
+    pEnd = StateT $ \case
+      [] -> pure ((), [])
+      _  -> empty
+
     pLine = pDecl <|> (Whnf <$> pExpr)
 
     pDecl = Decl <$> pName <* exact TEq <*> pExpr
@@ -86,6 +91,7 @@ runStmt (Whnf expr) = do
   glob <- readIORef globals
   clos <- compile expr
   whnfPpr glob clos
+  putStrLn ""
 
 run :: String -> IO ()
 run str = catch (runStmt $ parseLine str) (\e -> print (e :: SomeException))

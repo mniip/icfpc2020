@@ -31,6 +31,7 @@ chooseOpNum = 58336
 pairOpNum = 64170
 fstOpNum = 64174
 sndOpNum = 64171
+modemOpNum = 7110656
 pointOpNum = 17043521
 imageOpNum = 33047056
 checkerOpNum = 11184810
@@ -65,8 +66,9 @@ fromPegovkaOpNum = \case
   "cons" -> Just pairOpNum
   "car" -> Just fstOpNum
   "cdr" -> Just sndOpNum
+  "modem" -> Just modemOpNum
   "point" -> Just pointOpNum
-  "image" -> Just imageOpNum
+  "draw" -> Just imageOpNum
   "checkerboard" -> Just checkerOpNum
   "pwr2" -> Just pow2OpNum
   "mapImage" -> Just mapImageOpNum
