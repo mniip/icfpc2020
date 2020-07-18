@@ -1,5 +1,6 @@
 import Data.IORef
 import Control.Concurrent
+import System.Environment (getArgs)
 
 import Eval
 import VM
@@ -11,4 +12,9 @@ main = do
   mapM_ (run globals) . lines =<< readFile "prelude.txt"
   mapM_ (run globals) . lines =<< readFile "galaxy.txt"
   forkIO uiThread
-  interaction globals galaxyOpNum
+  args <- getArgs
+  if null args
+  then interaction globals galaxyOpNum []
+  else do
+      moves <- (map read . lines) `fmap` (readFile $ head args)
+      interaction globals galaxyOpNum moves

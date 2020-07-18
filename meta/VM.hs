@@ -352,8 +352,8 @@ mkGlobals = do
         go (LCons x xs) = [True, True] ++ go x ++ go xs
     builtinMod _ args _ = error $ "Expected 1 argument, got " ++ show (length args)
     builtinEval glob [x] self = do
-      -- putStrLn "Eval Out:"
-      -- print =<< whnfIntList glob x
+      putStrLn "Eval Out:"
+      print =<< whnfIntList glob x
       clos <- newThunk $ EntryGlobal modOpNum `EntryApply` EntryValue x
       whnfPpr glob clos >> putStrLn ""
       readClosure clos >>= \case
@@ -361,13 +361,13 @@ mkGlobals = do
           request' <- parseRequest ("POST https://icfpc2020-api.testkontur.ru/aliens/send?apiKey=5b1e7596cd5446e18dd969e5fcede90b")
           let request = setRequestBodyLBS (BLU.fromString $ map (\b -> if b then '1' else '0') $ elems bits) request'
           response <- httpLBS request
-          -- putStrLn "Eval In:"
+          putStrLn "Eval In:"
           case show (getResponseStatusCode response) of
             "200" -> do
               let line = map (=='1') $ BLU.toString $ getResponseBody response
               input <- newClosure $ ClosureBits $ listArray (0, length line - 1) line
               result <- newThunk $ EntryGlobal demOpNum `EntryApply` EntryValue input
-              -- print =<< whnfIntList glob result
+              print =<< whnfIntList glob result
               updateClosure self =<< readClosure result
               whnf glob self
             _ -> error "server error"

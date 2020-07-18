@@ -16,7 +16,7 @@ import Data.Char
 import Data.Maybe
 import Data.IORef
 import Control.Exception
-import System.IO (hFlush, stdout)
+import System.IO (hPutStrLn, hFlush, stdout, stderr)
 
 import Constants
 import VM
@@ -106,15 +106,27 @@ runStmt globals (Whnf expr) = do
 run :: IORef Globals -> String -> IO ()
 run globals str = catch (runStmt globals $ parseLine str) (\e -> print (e :: SomeException))
 
-interaction :: IORef Globals -> Natural -> IO ()
-interaction globals name = do
+interaction :: IORef Globals -> Natural -> [(Integer, Integer)] -> IO ()
+interaction globals name moves = do
   glob <- readIORef globals
   (x, y) <- pure (9999,9999)
   cx <- newInt x
   cy <- newInt y
   clos <- newThunk $ EntryGlobal interactOpNum `EntryApply` EntryGlobal name `EntryApply` EntryGlobal 123456 `EntryApply` (EntryGlobal pairOpNum `EntryApply` EntryValue cx `EntryApply` EntryValue cy)
-  go glob clos
+  goMoves glob clos moves
   where
+    goMoves glob clos [] = go glob clos
+    goMoves glob clos ((x, y):mvs) = do
+      (state:drawings:_) <- whnfList glob clos
+      pics <- mapM (getPic glob) =<< whnfList glob drawings
+      whnfPpr glob state >> putStrLn ""
+      putMVar picsMVar pics
+      cx <- newInt x
+      cy <- newInt y
+      hPutStrLn stderr ("(" ++ show x ++ ", " ++ show y ++ ")")
+      clos' <- newThunk $ EntryGlobal interactOpNum `EntryApply` EntryGlobal name `EntryApply` EntryValue state `EntryApply` (EntryGlobal pairOpNum `EntryApply` EntryValue cx `EntryApply` EntryValue cy)
+      goMoves glob clos' mvs
+
     go glob clos = do
       (state:drawings:_) <- whnfList glob clos
       pics <- mapM (getPic glob) =<< whnfList glob drawings
@@ -124,6 +136,7 @@ interaction globals name = do
       (x, y) <- takeMVar clicksMVar
       cx <- newInt x
       cy <- newInt y
+      hPutStrLn stderr ("(" ++ show x ++ ", " ++ show y ++ ")")
       clos' <- newThunk $ EntryGlobal interactOpNum `EntryApply` EntryGlobal name `EntryApply` EntryValue state `EntryApply` (EntryGlobal pairOpNum `EntryApply` EntryValue cx `EntryApply` EntryValue cy)
       go glob clos'
 
