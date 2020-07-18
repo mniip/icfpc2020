@@ -1,6 +1,10 @@
 {-# LANGUAGE LambdaCase #-}
 module VM where
 
+import Data.Maybe
+import Control.Monad.Trans.State
+import Control.Applicative
+import Data.List
 import Control.Monad
 import Data.Bits
 import Control.Exception
@@ -175,6 +179,12 @@ whnfList glob clos = do
       sndClos <- newThunk $ EntryGlobal sndOpNum `EntryApply` EntryValue clos
       (fstClos:) <$> whnfList glob sndClos
 
+whnfPair :: Globals -> Closure -> IO (Closure, Closure)
+whnfPair glob clos = do
+  fstClos <- newThunk $ EntryGlobal fstOpNum `EntryApply` EntryValue clos
+  sndClos <- newThunk $ EntryGlobal sndOpNum `EntryApply` EntryValue clos
+  pure (fstClos, sndClos)
+
 data IntList
   = LInt Integer
   | LCons IntList IntList
@@ -208,13 +218,17 @@ whnfPpr glob clos = do
   whnf glob clos
   readClosure clos >>= \case
     ClosureInt i -> putStr $ show i
-    ClosureBits bits -> putStr $ "[" ++ map (\b -> if b then '▀' else '▄') (elems bits) ++ "]"
+    -- ClosureBits bits -> putStr $ "[" ++ map (\b -> if b then '▀' else '▄') (elems bits) ++ "]"
+    ClosureBits bits -> putStr $ "[" ++ map (\b -> if b then '1' else '0') (elems bits) ++ "]"
     ClosureImage image | let (_, (w, h)) = bounds image
       -> do putStrLn ""
-            forM_ [0..w] $ \y -> do
-              forM_ [0..h] $ \x ->
+            putStrLn $ "┌" ++ replicate (w + 1) '─' ++ "┐"
+            forM_ [0..h] $ \y -> do
+              putStr "│"
+              forM_ [0..w] $ \x ->
                 putStr (if image ! (x, y) then "█" else " ")
-              putStrLn ""
+              putStrLn "│"
+            putStrLn $ "└" ++ replicate (w + 1) '─' ++ "┘"
     cd -> do
       targ <- newThunk $ EntryGlobal isNilOpNum `EntryApply` EntryValue clos
       whnfBool' glob targ >>= \case
@@ -314,9 +328,35 @@ mkGlobals = do
     builtinMod _ args _ = error $ "Expected 1 argument, got " ++ show (length args)
     builtinEval glob [x] self = undefined
     builtinEval _ args _ = error $ "Expected 1 argument, got " ++ show (length args)
-    builtinDem glob [x] self = undefined
+    builtinDem glob [x] self = do
+      whnf glob x
+      readClosure x >>= \case
+        ClosureBits bits -> do
+          clos <- newIntList $ fromMaybe (error "Demodulate parse error") $ evalStateT (go <* end) $ elems bits
+          updateClosure self =<< readClosure clos
+        cd               -> error $ "Expected bits, got " ++ pprClosureData cd
+      where
+        bit = StateT uncons
+        end = StateT $ \case
+          [] -> pure ((), [])
+          _  -> empty
+        exact t = mfilter (== t) bit
+        go = liftA2 (,) bit bit >>= \case
+          (False, False) -> pure LNil
+          (True, True) -> LCons <$> go <*> go
+          (sign, _) -> LInt <$> do
+            let getLen = bit >>= \b -> if b then succ <$> getLen else pure 0
+            len <- getLen
+            mantissa <- replicateM (4 * len) bit
+            pure $ (if sign then negate else id) $ foldl' (\x y -> 2*x + if y then 1 else 0) 0 mantissa
     builtinDem _ args _ = error $ "Expected 1 argument, got " ++ show (length args)
-    builtinImage glob [x] self = undefined
+    builtinImage glob [x] self = do
+      coords <- mapM (whnfCoords glob <=< whnfPair glob) =<< whnfList glob x
+      let w = 17; h = 13; r = ((0, 0), (w-1, h-1))
+      let contents = [(toInteger x, toInteger y) `elem` coords | (x, y) <- range r]
+      updateClosure self $ ClosureImage $ listArray r contents
+      where whnfCoords glob (x, y) = (,) <$> whnfInteger glob x <*> whnfInteger glob y
+
     builtinImage _ args _ = error $ "Expected 1 argument, got " ++ show (length args)
 
 addGlobal :: Globals -> Natural -> Closure -> IO Globals

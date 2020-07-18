@@ -38,6 +38,8 @@ checkerOpNum = 11184810
 pow2OpNum = 68191693600
 mapImageOpNum = 68259412260
 
+galaxyOpNum = 123229502148636
+
 fromPegovkaOpNum :: String -> Maybe Natural
 fromPegovkaOpNum = \case
   "ap" -> Just apOpNum
@@ -73,6 +75,6 @@ fromPegovkaOpNum = \case
   "pwr2" -> Just pow2OpNum
   "mapImage" -> Just mapImageOpNum
 
-  "galaxy" -> Just 123229502148636
+  "galaxy" -> Just galaxyOpNum
 
   _ -> Nothing
