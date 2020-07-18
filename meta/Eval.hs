@@ -11,6 +11,7 @@ import Data.Char
 import Data.Maybe
 import Data.IORef
 import Control.Exception
+import System.IO (hFlush, stdout)
 
 import Constants
 import VM
@@ -109,7 +110,9 @@ interaction globals name = do
   where
     go glob clos = do
       (state:drawings:_) <- whnfList glob clos
-      mapM_ (whnfPpr glob) =<< whnfList glob drawings
+      mapM_ (whnfUglyPrint glob) =<< whnfList glob drawings
+      putStrLn "I"
+      hFlush stdout
       [x, y] <- map read . words <$> getLine
       cx <- newInt x
       cy <- newInt y

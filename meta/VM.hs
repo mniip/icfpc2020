@@ -264,6 +264,18 @@ whnfPpr glob clos = do
                          | i == yes  -> pure $ Just True
             _                        -> pure $ Nothing
 
+whnfUglyPrint :: Globals -> Closure -> IO ()
+whnfUglyPrint glob clos = do
+  whnf glob clos
+  readClosure clos >>= \case
+    ClosureImage image | 
+        let ((minx, miny), (maxx, maxy)) = bounds image
+        -> do
+            putStrLn "P"
+            putStrLn (show minx ++ " " ++ show miny ++ " " ++ show maxx ++ " " ++ show maxy)
+            putStrLn $ map (\b -> if b then '1' else '0') $ elems image
+    _ -> return ()
+
 mkGlobals :: IO Globals
 mkGlobals = do
   idClos <- newFun 1 $ EntryArg 0
