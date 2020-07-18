@@ -1,6 +1,7 @@
 {-# LANGUAGE LambdaCase #-}
 module Language where
 
+import Control.Monad
 import Numeric.Natural
 import qualified Data.Map as M
 import Control.Applicative
@@ -47,7 +48,7 @@ data Combinator
   | MapImage
   deriving (Eq, Ord, Show)
 
-semantics :: [Rule Atom Integer v]
+semantics :: Show v => [Rule Atom Integer v]
 semantics =
   [ Rule
     { ruleName = "Succ"
@@ -84,8 +85,8 @@ semantics =
     , ruleLHS = EAtom (Comb EqBool) `EAp` EMVar 0 `EAp` EMVar 1
     , ruleRHS = EMVar 2
     , ruleProcess = NoShow $ \m -> do
-        n <- getInteger m 0
-        m <- getInteger m 1
+        n <- getInteger =<< M.lookup 0 m
+        m <- getInteger =<< M.lookup 1 m
         pure $ M.fromList [(2, EAtom $ Comb $ if n == m then CTrue else CFalse)]
     }
   , Rule
@@ -93,9 +94,34 @@ semantics =
     , ruleLHS = EAtom (Comb Lt) `EAp` EMVar 0
     , ruleRHS = EMVar 1
     , ruleProcess = NoShow $ \m -> do
-        n <- getInteger m 0
-        m <- getInteger m 1
+        n <- getInteger =<< M.lookup 0 m
+        m <- getInteger =<< M.lookup 1 m
         pure $ M.fromList [(2, EAtom $ Comb $ if n < m then CTrue else CFalse)]
+    }
+  , Rule
+    { ruleName = "Neg"
+    , ruleLHS = EAtom (Comb Neg) `EAp` EMVar 0
+    , ruleRHS = EMVar 1
+    , ruleProcess = NoShow $ \m -> do
+        n <- getInteger =<< M.lookup 0 m
+        m <- getInteger =<< M.lookup 1 m
+        pure $ M.fromList [(2, EAtom $ Comb $ if n < m then CTrue else CFalse)]
+    }
+  , Rule
+    { ruleName = "MkImage"
+    , ruleLHS = EAtom (Comb MkImage) `EAp` EMVar 0
+    , ruleRHS = EMVar 1
+    , ruleProcess = NoShow $ \m -> do
+        let natPair p = do
+              (i, j) <- getPair p
+              x <- getInteger i
+              y <- getInteger j
+              guard (x >= 0 && y >= 0)
+              pure (fromInteger x, fromInteger y)
+        pixels <- mapM natPair =<< getList =<< M.lookup 0 m
+        let { width = 17; height = 13 }
+        let contents = [[(x, y) `elem` pixels | x <- [0..width-1]] | y <- [0..height-1]]
+        pure $ M.fromList [(1, EAtom $ Picture width height contents)]
     }
 
   , Rule
@@ -182,22 +208,36 @@ semantics =
     , ruleRHS = EAtom (Comb Pair)
     , ruleProcess = NoShow Just
     }
+  , Rule
+    { ruleName = "MkChecker"
+    , ruleLHS = EAtom (Comb MkChecker)
+    , ruleRHS = EAp (EAp (EAtom (Comb S)) (EAp (EAp (EAtom (Comb Compose)) (EAtom (Comb S))) (EAp (EAp (EAtom (Comb Flip)) (EAp (EAp (EAtom (Comb Compose)) (EAtom (Comb Flip))) (EAp (EAp (EAtom (Comb Compose)) (EAp (EAtom (Comb Flip)) (EAp (EAtom (Comb Flip)) (EAp (EAp (EAtom (Comb S)) (EAp (EAp (EAtom (Comb Compose)) (EAtom (Comb S))) (EAp (EAp (EAtom (Comb Compose)) (EAp (EAtom (Comb Compose)) (EAp (EAp (EAtom (Comb S)) (EAtom (Comb Id))) (EAtom (Comb Id))))) (EAtom (Comb Lt))))) (EAtom (Comb EqBool)))))) (EAp (EAp (EAtom (Comb S)) (EAtom (Comb Mul))) (EAtom (Comb Id)))))) (EAtom (Comb Nil))))) (EAp (EAp (EAtom (Comb S)) (EAp (EAp (EAtom (Comb Compose)) (EAtom (Comb S))) (EAp (EAp (EAtom (Comb Compose)) (EAp (EAtom (Comb Compose)) (EAtom (Comb Pair)))) (EAp (EAp (EAtom (Comb S)) (EAp (EAp (EAtom (Comb Compose)) (EAtom (Comb S))) (EAp (EAp (EAtom (Comb Compose)) (EAp (EAtom (Comb Compose)) (EAtom (Comb Pair)))) (EAp (EAtom (Comb Flip)) (EAtom (Comb Div)))))) (EAp (EAtom (Comb Flip)) (EAp (EAp (EAtom (Comb S)) (EAp (EAp (EAtom (Comb Compose)) (EAtom (Comb Compose))) (EAp (EAp (EAtom (Comb Flip)) (EAp (EAp (EAtom (Comb Compose)) (EAtom (Comb Compose))) (EAtom (Comb Add)))) (EAtom (Comb Neg))))) (EAp (EAp (EAtom (Comb Compose)) (EAp (EAtom (Comb S)) (EAtom (Comb Mul)))) (EAtom (Comb Div))))))))) (EAp (EAp (EAtom (Comb Flip)) (EAp (EAp (EAtom (Comb Compose)) (EAtom (Comb Compose))) (EAtom (Comb MkChecker)))) (EAp (EAp (EAtom (Comb Flip)) (EAtom (Comb Add))) (EAtom (Num 2)))))
+    , ruleProcess = NoShow Just
+    }
   ]
   where
-    getInteger :: M.Map Integer (Expr Atom v) -> Integer -> Maybe Integer
-    getInteger m i = M.lookup i m >>= \case
-      EAtom (Num j) -> pure j
-      _             -> empty
+    getInteger :: Expr Atom v -> Maybe Integer
+    getInteger (EAtom (Num j)) = pure j
+    getInteger _ = empty
+
+    getList :: Expr Atom v -> Maybe [Expr Atom v]
+    getList (EAp (EAp (EAtom (Comb Pair)) x) xs) = (x:) <$> getList xs
+    getList (EAtom (Comb Nil)) = pure []
+    getList _ = empty
+
+    getPair :: Expr Atom v -> Maybe (Expr Atom v, Expr Atom v)
+    getPair (EAp (EAp (EAtom (Comb Pair)) x) y) = pure (x, y)
+    getPair _ = empty
 
     unaryIntOp :: (Integer -> Integer) -> NoShow (M.Map Integer (Expr Atom v) -> Maybe (M.Map Integer (Expr Atom v)))
     unaryIntOp f = NoShow $ \m -> do
-      n <- getInteger m 0
+      n <- getInteger =<< M.lookup 0 m
       pure $ M.fromList [(1, EAtom $ Num $ f n)]
 
     binaryIntOp :: (Integer -> Integer -> Integer) -> NoShow (M.Map Integer (Expr Atom v) -> Maybe (M.Map Integer (Expr Atom v)))
     binaryIntOp f = NoShow $ \m -> do
-      n <- getInteger m 0
-      m <- getInteger m 1
+      n <- getInteger =<< M.lookup 0 m
+      m <- getInteger =<< M.lookup 1 m
       pure $ M.fromList [(2, EAtom $ Num $ f n m)]
 
 makeRule :: Show v => (MetaExpr Atom Integer v, MetaExpr Atom Integer v) -> Rule Atom Integer v
