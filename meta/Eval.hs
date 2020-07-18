@@ -78,20 +78,22 @@ compile e = newThunk =<< compileEntry e
     compileEntry expr = do
       EntryValue <$> compile expr
 
-globals :: IORef Globals
-globals = unsafePerformIO $ newIORef =<< mkGlobals
-
-runStmt :: ReplStmt -> IO ()
-runStmt (Decl num expr) = do
+runStmt :: IORef Globals -> ReplStmt -> IO ()
+runStmt globals (Decl num expr) = do
   glob <- readIORef globals
   clos <- compile expr
   glob' <- addGlobal glob num clos
   writeIORef globals glob'
-runStmt (Whnf expr) = do
+runStmt globals (Whnf expr) = do
   glob <- readIORef globals
   clos <- compile expr
   whnfPpr glob clos
   putStrLn ""
 
-run :: String -> IO ()
-run str = catch (runStmt $ parseLine str) (\e -> print (e :: SomeException))
+run :: IORef Globals -> String -> IO ()
+run globals str = catch (runStmt globals $ parseLine str) (\e -> print (e :: SomeException))
+
+runProgram :: [String] -> IO ()
+runProgram strs = do
+    globals <- (newIORef =<< mkGlobals)
+    mapM_ (run globals) strs
