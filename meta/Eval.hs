@@ -100,8 +100,8 @@ runStmt globals (Whnf expr) = do
 run :: IORef Globals -> String -> IO ()
 run globals str = catch (runStmt globals $ parseLine str) (\e -> print (e :: SomeException))
 
-interact :: IORef Globals -> Natural -> IO ()
-interact globals name = do
+interaction :: IORef Globals -> Natural -> IO ()
+interaction globals name = do
   glob <- readIORef globals
   zero <- newInt 0
   clos <- newThunk $ EntryGlobal interactOpNum `EntryApply` EntryGlobal name `EntryApply` EntryGlobal nilOpNum `EntryApply` (EntryGlobal pairOpNum `EntryApply` EntryValue zero `EntryApply` EntryValue zero)

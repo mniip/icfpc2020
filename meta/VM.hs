@@ -76,7 +76,7 @@ whnf glob self = readClosure self >>= \case
 
 enterUpdate :: Globals -> [Closure] -> EntryCode -> Closure -> IO ()
 enterUpdate glob _ (EntryGlobal i) self = do
-  let clos = HM.findWithDefault (error $ "Missing global " ++ show i) i $ getGlobals glob
+  let clos = fromMaybe (error $ "Missing global " ++ show i) $ HM.lookup i $ getGlobals glob
   updateClosure self $ ClosureAlias clos
   whnf glob self
 enterUpdate glob args (EntryArg i) self = do
@@ -103,7 +103,7 @@ enterUpdate glob args (EntryBuiltin f) self = do
 
 pprClosureData :: ClosureData -> String
 pprClosureData (ClosureInt i) = show i
-pprClosureData (ClosureBits bits) = "[" ++ map (\b -> if b then '0' else '1') (elems bits) ++ "]"
+pprClosureData (ClosureBits bits) = "[" ++ map (\b -> if b then '1' else '0') (elems bits) ++ "]"
 pprClosureData (ClosureImage image) = "Image (" ++ show w ++ "x" ++ show h ++ ")"
   where (w, h) = bounds image
 pprClosureData (ClosureFun n _ entry) = (if n == 0 then "Thunk" else "Fun/" ++ show n) ++ " " ++ pprEntry entry
@@ -225,15 +225,19 @@ whnfPpr glob clos = do
     ClosureInt i -> putStr $ show i
     -- ClosureBits bits -> putStr $ "[" ++ map (\b -> if b then '▀' else '▄') (elems bits) ++ "]"
     ClosureBits bits -> putStr $ "[" ++ map (\b -> if b then '1' else '0') (elems bits) ++ "]"
-    ClosureImage image | let (_, (w, h)) = bounds image
+    ClosureImage image | let ((minx, miny), (maxx, maxy)) = bounds image
       -> do putStrLn ""
-            putStrLn $ "┌" ++ replicate (w + 1) '─' ++ "┐"
-            forM_ [0..h] $ \y -> do
+            putStrLn $ "┌" ++ replicate (3 * (maxx - minx + 1)) '─' ++ "┐"
+            forM_ [miny..maxy] $ \y -> do
               putStr "│"
-              forM_ [0..w] $ \x ->
-                putStr (if image ! (x, y) then "█" else " ")
+              forM_ [minx..maxx] $ \x ->
+                putStr $ (if image ! (x, y) then "\x1B[107;30m" else "") ++ (take 3 $ show x ++ repeat ' ') ++ "\x1B[0m"
               putStrLn "│"
-            putStrLn $ "└" ++ replicate (w + 1) '─' ++ "┘"
+              putStr "│"
+              forM_ [minx..maxx] $ \x ->
+                putStr $ (if image ! (x, y) then "\x1B[107;30m" else "") ++ (take 3 $ show y ++ repeat ' ') ++ "\x1B[0m"
+              putStrLn "│"
+            putStrLn $ "└" ++ replicate (3 * (maxx - minx + 1)) '─' ++ "┘"
     cd -> do
       targ <- newThunk $ EntryGlobal isNilOpNum `EntryApply` EntryValue clos
       whnfBool' glob targ >>= \case
@@ -332,7 +336,18 @@ mkGlobals = do
         go LNil         = [False, False]
         go (LCons x xs) = [True, True] ++ go x ++ go xs
     builtinMod _ args _ = error $ "Expected 1 argument, got " ++ show (length args)
-    builtinEval glob [x] self = undefined
+    builtinEval glob [x] self = do
+      putStrLn "Eval Out:"
+      print =<< whnfIntList glob x
+      clos <- newThunk $ EntryGlobal modOpNum `EntryApply` EntryValue x
+      whnfPpr glob clos >> putStrLn ""
+      putStrLn "Eval In:"
+      line <- map (== '1') <$> getLine
+      input <- newClosure $ ClosureBits $ listArray (0, length line - 1) line
+      result <- newThunk $ EntryGlobal demOpNum `EntryApply` EntryValue input
+      print =<< whnfIntList glob result
+      updateClosure self =<< readClosure result
+      whnf glob self
     builtinEval _ args _ = error $ "Expected 1 argument, got " ++ show (length args)
     builtinDem glob [x] self = do
       whnf glob x
@@ -359,11 +374,10 @@ mkGlobals = do
     builtinDem _ args _ = error $ "Expected 1 argument, got " ++ show (length args)
     builtinImage glob [x] self = do
       coords <- mapM (whnfCoords glob <=< whnfPair glob) =<< whnfList glob x
-      -- TODO : proper padding
-      let dx = minimum $ fst <$> (0, 0) : coords; dy = minimum $ snd <$> (0, 0) : coords
-      let coords' = map (subtract dx *** subtract dy) coords
-      let w = fromInteger $ maximum $ fst <$> (0, 0) : coords'; h = fromInteger $ maximum $ snd <$> (0, 0) : coords'; r = ((0, 0), (w, h))
-      let contents = [(toInteger x, toInteger y) `elem` coords' | (x, y) <- range r]
+      let cs = (0, 0) : coords
+      let minx = fromInteger $ minimum $ fst <$> cs; miny = fromInteger $ minimum $ snd <$> cs; maxx = fromInteger $ maximum $ fst <$> cs; maxy = fromInteger $ maximum $ snd <$> cs
+      let r = ((minx, miny), (maxx, maxy))
+      let contents = [(toInteger x, toInteger y) `elem` coords | (x, y) <- range r]
       updateClosure self $ ClosureImage $ listArray r contents
       where whnfCoords glob (x, y) = (,) <$> whnfInteger glob x <*> whnfInteger glob y
 

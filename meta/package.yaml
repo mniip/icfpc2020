@@ -12,6 +12,8 @@ dependencies:
 - binary >= 0.8
 - split >= 0.2
 - transformers >= 0.5
+- array >= 0.5
+- unordered-containers >= 0.2
 
 library:
   source-dirs: .
@@ -37,6 +39,12 @@ executables:
     ghc-options: [-O2]
   run:
     main:                Run.hs
+    source-dirs: app
+    other-modules: []
+    dependencies: [icfpc2020-powder-meta]
+    ghc-options: [-O2]
+  interact:
+    main:                Interact.hs
     source-dirs: app
     other-modules: []
     dependencies: [icfpc2020-powder-meta]
