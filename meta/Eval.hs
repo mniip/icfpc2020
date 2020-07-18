@@ -2,7 +2,7 @@
 
 module Eval where
 
-import Graphics.Gloss.Interface.IO.Interact
+import Graphics.Gloss.Interface.IO.Game
 import Control.Concurrent.MVar
 import System.IO.Unsafe
 import Data.Array.Unboxed
@@ -109,7 +109,7 @@ run globals str = catch (runStmt globals $ parseLine str) (\e -> print (e :: Som
 interaction :: IORef Globals -> Natural -> IO ()
 interaction globals name = do
   glob <- readIORef globals
-  (x, y) <- pure (0, 0)
+  (x, y) <- pure (9999,9999)
   cx <- newInt x
   cy <- newInt y
   clos <- newThunk $ EntryGlobal interactOpNum `EntryApply` EntryGlobal name `EntryApply` EntryGlobal 123456 `EntryApply` (EntryGlobal pairOpNum `EntryApply` EntryValue cx `EntryApply` EntryValue cy)
@@ -144,7 +144,7 @@ picsMVar :: MVar [UArray (Int, Int) Bool]
 picsMVar = unsafePerformIO newEmptyMVar
 
 uiThread :: IO ()
-uiThread = interactIO FullScreen black [] (pure . drawArrs) events (\_ -> pure ())
+uiThread = playIO FullScreen black 25 [] (pure . drawArrs) events timestep
   where
     drawArrs arrs = Scale scale scale $ Pictures $ zipWith Color (cycle $ withAlpha 0.5 <$> [red, green, blue, yellow, cyan, magenta, rose, violet, azure, aquamarine, chartreuse, orange]) (drawArr <$> arrs)
     drawArr :: UArray (Int, Int) Bool -> Picture
@@ -152,10 +152,12 @@ uiThread = interactIO FullScreen black [] (pure . drawArrs) events (\_ -> pure (
       where ((minx, miny), (maxx, maxy)) = bounds arr
 
     events (EventKey (MouseButton LeftButton) Down _ (x, y)) world = do
-      putMVar clicksMVar (floor $ x / scale, floor $ -y / scale)
+      putMVar clicksMVar (floor $ x / scale + 0.5, floor $ -y / scale + 0.5)
       pure world
-    events _ world = tryTakeMVar picsMVar >>= \case
+    events _ world = pure world
+
+    timestep _ world = tryTakeMVar picsMVar >>= \case
       Just world' -> pure world'
       _           -> pure world
 
-    scale = 10
+    scale = 7
