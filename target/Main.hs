@@ -26,9 +26,11 @@ main = do
     go (RespGame Finished _ _) = pure ()
     go (RespGame Started info (Just state)) = do
       let myShips = map fst $ filter (\(s, _) -> shipTeam s == myTeam info) $ gameShips state
-      runHTTP uri (ReqAct key [Boost (shipId s) (Coord 1 0) | s <- myShips]) >>= go
+      runHTTP uri (ReqAct key [Boost (shipId s) (quadrant (shipPos s)) | s <- myShips]) >>= go
     go resp = error $ show resp
   runHTTP uri (ReqJoin key [103652820,192496425430]) >>= \case
     RespGame NotStarted info _ -> do
       let m = maxTotal $ maxStats info
       runHTTP uri (ReqStart key (Just $ Stats (m - 2) 0 0 1)) >>= go
+    where
+      quadrant (Coord x y) = Coord (-signum x * (if abs x >= abs y then 1 else 0)) (-signum y * (if abs y >= abs x then 1 else 0))
