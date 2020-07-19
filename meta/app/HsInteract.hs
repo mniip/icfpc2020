@@ -21,7 +21,7 @@ import Control.Arrow
 import Protocol
 import Blocks
 
-data GameState = GameState
+data GlossState = GlossState
   { txtScale :: Float
   , uiScale :: Float
   , currentPictures :: [Drawing]
@@ -40,7 +40,7 @@ main = do
   let
     interactor = galaxy
 
-    initGame = GameState
+    initGame = GlossState
       { txtScale = 1
       , uiScale = 5
       , currentPictures = []
@@ -80,11 +80,13 @@ main = do
     printState (AlienState state) = putStrLn $ "State: " ++ pprList state
 
     httpSenderLog req = do
-      lift $ putStrLn $ "-> " ++ showInterpret req
-      tell $ reverse $ zipWith (++) ("-> ":repeat "..... ") $ chunksOf 128 $ showInterpret req
+      let preq = maybe (pprList req) show $ (fromProto req :: Maybe Protocol.Request)
+      lift $ putStrLn $ "-> " ++ preq
+      tell $ reverse $ zipWith (++) ("-> ":repeat "..... ") $ chunksOf 128 preq
       resp <- lift $ httpSender req
-      lift $ putStrLn $ "<- " ++ showInterpret resp
-      tell $ reverse $ zipWith (++) ("<- ":repeat "..... ") $ chunksOf 128 $ showInterpret resp
+      let presp = maybe (pprList req) show $ (fromProto resp :: Maybe Protocol.Response)
+      lift $ putStrLn $ "<- " ++ presp
+      tell $ reverse $ zipWith (++) ("<- ":repeat "..... ") $ chunksOf 128 presp
       pure resp
 
     httpSender req = do
