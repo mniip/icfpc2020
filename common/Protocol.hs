@@ -234,19 +234,19 @@ instance Protocol Response where
       parseGame p = aListN 3 p >>= \[status, info, state] -> RespGame <$> fromProto status <*> fromProto info <*> aMaybeAsNil state fromProto
 
 data Ship = Ship
-  { shipTeam  :: Integer
-  , shipId    :: ShipId
-  , shipPos   :: Coord
-  , shipVel   :: Coord
-  , shipStats :: Stats
-  , temp      :: Integer
-  , unknown8  :: IntList
+  { shipTeam    :: Integer
+  , shipId      :: ShipId
+  , shipPos     :: Coord
+  , shipVel     :: Coord
+  , shipStats   :: Stats
+  , shipTemp    :: Integer
+  , shipMaxTemp :: Integer
   , unknown9  :: IntList
   }
   deriving (Eq, Show)
 instance Protocol Ship where
   toProto = error "toProto Ship"
-  fromProto p = aListN 8 p >>= \[team, id, pos, vel, stats, temp, u8, u9] -> Ship <$> fromProto team <*> fromProto id <*> fromProto pos <*> fromProto vel <*> fromProto stats <*> fromProto temp <*> pure u8 <*> pure u9
+  fromProto p = aListN 8 p >>= \[team, id, pos, vel, stats, temp, maxt, u9] -> Ship <$> fromProto team <*> fromProto id <*> fromProto pos <*> fromProto vel <*> fromProto stats <*> fromProto temp <*> fromProto maxt <*> pure u9
 
 -- Same as Action but without ship id
 data SAction

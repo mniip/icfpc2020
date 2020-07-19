@@ -9,20 +9,12 @@ type Vel = (Int, Int)
 type Accel = (Int, Int)
 
 simulateOrbit :: Pos -> Vel -> a -> (Pos -> Vel -> a -> Either b (a, Accel)) -> b
-simulateOrbit (x, y) (vx, vy) val boost
-  = case boost (x, y) (vx, vy) val of
+simulateOrbit pos vel val boost
+  = case boost pos vel val of
        Left ret -> ret
-       Right (val', (bx, by))
-         -> let
-              gravx = -signum x * (if abs x >= abs y then 1 else 0)
-              gravy = -signum y * (if abs y >= abs x then 1 else 0)
-
-              vx' = vx + gravx + bx
-              vy' = vy + gravy + by
-
-              x' = x + vx'
-              y' = y + vy'
-            in simulateOrbit (x', y') (vx', vy') val' boost
+       Right (val', bs)
+         -> case estimateNextPos pos vel bs of
+              (pos', vel') -> simulateOrbit pos' vel' val' boost
 
 data L1Quadrant = North | East | South | West deriving (Eq, Show)
 
@@ -82,15 +74,37 @@ decideOrbital pos vel radius
 produceInitialStats :: GameInfo -> IO Stats
 produceInitialStats info = do
   let m = maxTotal $ maxStats info
-  pure $ Stats (m - 2 - 3 * 12) 0 3 1
+  pure $ Stats (m - 3 * 4 - 3 * 12 - 2 * 1) 3 3 1
+
+estimateNextPos :: Pos -> Vel -> Accel -> (Pos, Vel)
+estimateNextPos (x, y) (vx, vy) (bx, by)
+  = let
+      gravx = -signum x * (if abs x >= abs y then 1 else 0)
+      gravy = -signum y * (if abs y >= abs x then 1 else 0)
+
+      vx' = vx + gravx + bx
+      vy' = vy + gravy + by
+
+      x' = x + vx'
+      y' = y + vy'
+    in ((x', y'), (vx', vy'))
 
 produceMoves
   :: GameInfo
   -> [GameState] -- ^ head is most recent
   -> IO [Action]
-produceMoves info (state:_) = pure [Boost (shipId ship) (negatec2p $ decideOrbital (p2c $ shipPos ship) (p2c $ shipVel ship) radius) | (ship, _) <- gameShips state, shipTeam ship == ourTeam]
+produceMoves info (state:_) = pure $ map orbitalControl ourShips ++ map weaponControl ourShips
   where
     ourTeam = myTeam info
     p2c (Coord x y) = (fromInteger x, fromInteger y)
+    c2p (x, y) = Coord (toInteger x) (toInteger y)
     negatec2p (x, y) = Coord (toInteger (-x)) (toInteger (-y))
     radius = fromInteger $ planet info
+
+    ourShips = filter ((ourTeam ==) . shipTeam) $ fst <$> gameShips state
+    orbitalControl ship = Boost (shipId ship) $ negatec2p $ decideOrbital (p2c $ shipPos ship) (p2c $ shipVel ship) radius
+
+    enemy = head $ filter ((ourTeam /=) . shipTeam) $ fst <$> gameShips state
+    (epos, _) = estimateNextPos (p2c $ shipPos enemy) (p2c $ shipVel enemy) (0, 0)
+
+    weaponControl ship = Laser (shipId ship) (c2p epos) (shipMaxTemp ship + 3 - shipTemp ship )

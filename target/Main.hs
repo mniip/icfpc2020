@@ -13,6 +13,7 @@ import AI.Orbital
 
 runHTTP :: (String -> String) -> Protocol.Request -> IO Protocol.Response
 runHTTP mkUri req = do
+  hPutStrLn stderr $ show req
   let sreq = map (\case True -> '1'; False -> '0') $ modulate $ toProto req
   request <- setRequestBodyLBS (BLU.fromString sreq) <$> parseRequest (mkUri "/aliens/send")
   response <- httpLBS request
@@ -20,7 +21,8 @@ runHTTP mkUri req = do
     "200" -> do
         let sresp = BLU.toString $ getResponseBody response
         case fromProto $ demodulate $ (== '1') <$> sresp of
-          Just resp -> pure resp
+          Just resp -> do hPutStrLn stderr $ show resp
+                          pure resp
           _ -> error $ "Could not parse: " ++ show (demodulate $ map (=='1') sresp)
     _ -> error $ "Server error: " ++ show response
 
