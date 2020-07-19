@@ -18,3 +18,4 @@ library:
   exposed-modules:
   - Common
   - Protocol
+  - AI.Orbital
