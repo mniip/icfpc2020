@@ -169,8 +169,8 @@ instance Protocol Request where
 
 data StatsSettings = StatsSettings
   { maxTotal  :: Integer
-  , unknown13 :: Integer
-  , unknown14 :: Integer
+  , maxBoost :: Integer
+  , maxTemp :: Integer
   }
   deriving (Eq, Show)
 instance Protocol StatsSettings where
