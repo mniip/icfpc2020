@@ -2,7 +2,7 @@
 
 import Alien.FFI
 import Alien.Galaxy
-import Graphics.Gloss.Interface.IO.Game
+import Graphics.Gloss.Interface.IO.Game hiding (Point)
 import Network.HTTP.Simple
 import qualified Data.ByteString.Lazy.UTF8 as BLU
 import Control.Monad.Trans.Writer
@@ -13,6 +13,12 @@ import System.IO (hPutStrLn, stderr)
 import Data.List
 import Data.List.Split
 import Data.Char (isSpace)
+import qualified Data.Set as S
+import Data.Array.Unboxed
+import Data.Tuple
+import Control.Arrow
+
+import Blocks
 
 data GameState = GameState
   { uiScale :: Float
@@ -22,6 +28,7 @@ data GameState = GameState
   , showState :: Bool
   , showHttpLog :: Bool
   , httpLog :: [String]
+  , showNumbers :: Bool
   } deriving (Eq, Ord, Show)
 
 main = do
@@ -39,6 +46,7 @@ main = do
       , showState = False
       , showHttpLog = False
       , httpLog = []
+      , showNumbers = True
       }
 
     mapMouse world (x, y) = (floor $ x / uiScale world + 0.5, floor $ -y / uiScale world + 0.5)
@@ -54,6 +62,7 @@ main = do
     events (EventKey (SpecialKey KeyUp) Down _ _) world = pure $ world { uiScale = uiScale world / 0.8 }
     events (EventKey (Char 's') Down _ _) world = pure $ world { showState = not $ showState world }
     events (EventKey (Char 'l') Down _ _) world = pure $ world { showHttpLog = not $ showHttpLog world }
+    events (EventKey (Char 'n') Down _ _) world = pure $ world { showNumbers = not $ showNumbers world }
     events (EventKey (Char 'i') Down _ _) world = do
       putStrLn "Input X Y:"
       [x, y] <- map read . words <$> getLine
@@ -89,7 +98,7 @@ main = do
         _ -> error $ "Server error: " ++ show response
 
     draw world = Pictures $
-      [ Scale (uiScale world) (uiScale world) $ drawPictures (currentPictures world)
+      [ Scale (uiScale world) (uiScale world) $ drawPictures (showNumbers world) (currentPictures world)
       , Translate (uiScale world * fromIntegral (fst $ mousePos world)) (uiScale world * negate (fromIntegral (snd $ mousePos world)))
         $ Scale 0.2 0.2 $ Color white $ Text $ show (mousePos world) ]
       ++ if showState world
@@ -103,15 +112,68 @@ main = do
       where
         pprState (AlienState state) = pprList state
 
-    drawPictures pics
-      = Pictures $ reverse $ zipWith Color (withAlpha 0.5 <$> cycle colors) (drawPic <$> pics)
+    drawPictures showNums pics
+      = Pictures $ reverse $ zipWith Color (withAlpha 0.5 <$> cycle colors) (drawPic showNums <$> pics)
       where
         colors = [red, green, blue, yellow, cyan, magenta, rose, violet, azure, aquamarine, chartreuse, orange]
-    drawPic (Drawing coords) = Pictures $ map pixel coords
-      where pixel (i, j) = Translate (fromInteger i) (fromInteger (-j)) $ Polygon $ rectanglePath 1 1
+    drawPic showNums (Drawing coords) = Pictures $ map pixel coords
+      ++ if showNums
+         then [number n x1 y1 | r@((x1, y1), _) <- findBlocksArr grid, Just n <- [numValue' grid r]]
+         else []
+      where
+        pixel (i, j) = Translate (fromInteger i) (fromInteger (-j)) $ Polygon $ rectanglePath 1 1
+        number n i j = Color white $ Translate (-0.5 + fromIntegral i) (-1.5 + fromIntegral (-j)) $ Scale 0.02 0.02 $ Text $ show n
+
+        grid = coordsToArr $ (fromInteger *** fromInteger) <$> coords
 
   playIO FullScreen black 25 initGame (pure . draw) events (const pure)
 
+coordsToArr :: [Point Int] -> UArray (Int, Int) Bool
+coordsToArr coords = accumArray (||) False ((minx, miny), (maxx, maxy)) [(p, True) | p <- coords]
+  where
+    minx = minimum $ fst <$> nonEmpCoords
+    maxx = maximum $ fst <$> nonEmpCoords
+    miny = minimum $ snd <$> nonEmpCoords
+    maxy = maximum $ snd <$> nonEmpCoords
+    nonEmpCoords = case coords of
+      [] -> [(0, 0)]
+      _  -> coords
+
+findBlocksInArr :: [Point Int] -> UArray (Int, Int) Bool -> [Block Int]
+findBlocksInArr rs grid = go S.empty rs
+  where
+    go seen (p:ps)
+      | not $ index p = go seen ps
+      | p `S.member` seen = go seen ps
+      | r <- findBlock index p
+      , nonTrivialBlock r
+      = r : go (S.union seen $ S.fromList $ filter index $ range r) ps
+      | otherwise
+      = go (S.insert p seen) ps
+    go seen [] = []
+
+    nonTrivialBlock ((x1, y1), (x2, y2)) = x1 < x2 && y1 < y2
+
+    rng = bounds grid
+    index p = inRange rng p && grid ! p
+
+findBlocksArr :: UArray (Int, Int) Bool -> [Block Int]
+findBlocksArr = findBlocksInArr =<< (range . bounds)
+
+numValue' :: UArray (Int, Int) Bool -> Block Int -> Maybe Integer
+numValue' grid ((x1, y1), (x2, y2))
+  | width >= 2 && height >= 2
+  , width == height || width + 1 == height
+  , all (\x -> grid ! (x, y1)) [x1+1..x2]
+  , all (\y -> grid ! (x1, y)) [y1+1..y2]
+  , not $ grid ! (x1, y1)
+  = Just $ (if width < height then negate else id)
+    $ foldr (\x y -> (if x then 1 else 0) + 2 * y) 0
+    $ (grid !) <$> (map swap . range . (swap *** swap)) ((x1 + 1, y1 + 1), (x2, y2))
+  where
+    width = x2 - x1 + 1
+    height = y2 - y1 + 1
+numValue' _ _ = Nothing
 
 data MStruct = MList [MStruct] | MInt Integer | MCons (MStruct, MStruct) deriving (Read, Show)
 
