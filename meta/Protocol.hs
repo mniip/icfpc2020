@@ -133,12 +133,12 @@ instance Protocol Action where
   toProto (Boost id coord)        = toProto [LInt 0, toProto id, toProto coord]
   toProto (Detonate id)           = toProto [LInt 1, toProto id]
   toProto (Laser id target power) = toProto [LInt 2, toProto id, toProto target, toProto power]
-  toProto (Mitosis id Stats{..})  = toProto [LInt 3, toProto id, toProto hitpoints, toProto mana, toProto charisma, toProto telomeres]
+  toProto (Mitosis id stats)      = toProto [LInt 3, toProto id, toProto stats]
   fromProto = aVariant
     [ (0, \p -> aListN 2 p >>= \[id, coord] -> Boost <$> fromProto id <*> fromProto coord)
     , (1, \p -> aListN 1 p >>= \[id] -> Detonate <$> fromProto id)
     , (2, \p -> aListN 3 p >>= \[id, target, power] -> Laser <$> fromProto id <*> fromProto target <*> fromProto power)
-    , (3, \p -> aListN 5 p >>= \[id, hitpoints, mana, charisma, telomeres] -> Mitosis <$> fromProto id <*> (Stats <$> fromProto hitpoints <*> fromProto mana <*> fromProto charisma <*> fromProto telomeres))
+    , (3, \p -> aListN 2 p >>= \[id, stats] -> Mitosis <$> fromProto id <*> fromProto stats)
     ]
 
 data Request
@@ -239,30 +239,18 @@ instance Protocol Ship where
 -- Same as Action but without ship id
 data SAction
   = SBoost Coord
-  | SDetonate
-  | SLaser Coord Integer {- energy? -}
+  | SDetonate Integer Integer {- possibly explosion? -}
+  | SLaser Coord Integer {- energy? -} Integer Integer {- ? -}
   | SMitosis Stats
   deriving (Eq, Show)
 instance Protocol SAction where
   toProto (SBoost coord)        = toProto [LInt 0, toProto coord]
-  toProto SDetonate             = toProto [LInt 1]
-  toProto (SLaser target power) = toProto [LInt 2, toProto target, toProto power]
-  toProto (SMitosis Stats{..})  = toProto [LInt 3, toProto hitpoints, toProto mana, toProto charisma, toProto telomeres]
+  toProto (SDetonate u10 u11)   = toProto [LInt 1, toProto u10, toProto u11]
+  toProto (SLaser target power u12 u13) = toProto [LInt 2, toProto target, toProto power, toProto u12, toProto u13]
+  toProto (SMitosis stats)  = toProto [LInt 3, toProto stats]
   fromProto = aVariant
     [ (0, \p -> aListN 1 p >>= \[coord] -> SBoost <$> fromProto coord)
-    , (1, \p -> aListN 0 p >>= \[] -> pure SDetonate)
-    , (2, \p -> aListN 2 p >>= \[target, power] -> SLaser <$> fromProto target <*> fromProto power)
-    , (3, \p -> aListN 4 p >>= \[hitpoints, mana, charisma, telomeres] -> SMitosis <$> (Stats <$> fromProto hitpoints <*> fromProto mana <*> fromProto charisma <*> fromProto telomeres))
+    , (1, \p -> aListN 2 p >>= \[u10, u11] -> SDetonate <$> fromProto u10 <*> fromProto u11)
+    , (2, \p -> aListN 4 p >>= \[target, power, u12, u13] -> SLaser <$> fromProto target <*> fromProto power <*> fromProto u12 <*> fromProto u13)
+    , (3, \p -> aListN 1 p >>= \[stats] -> SMitosis <$> fromProto stats)
     ]
-
-toSAction :: Action -> (ShipId, SAction)
-toSAction (Boost id pos) = (id, SBoost pos)
-toSAction (Detonate id) = (id, SDetonate)
-toSAction (Laser id pos power) = (id, SLaser pos power)
-toSAction (Mitosis id stats) = (id, SMitosis stats)
-
-fromSAction :: ShipId -> SAction -> Action
-fromSAction id (SBoost pos) = Boost id pos
-fromSAction id SDetonate = Detonate id
-fromSAction id (SLaser pos power) = Laser id pos power
-fromSAction id (SMitosis stats) = Mitosis id stats
