@@ -2,6 +2,9 @@
 
 module AI.Orbital where
 
+import Data.Ratio
+import Data.Maybe
+
 import Protocol
 
 type Pos = (Int, Int)
@@ -74,7 +77,10 @@ decideOrbital pos vel radius
 produceInitialStats :: GameInfo -> IO Stats
 produceInitialStats info = do
   let m = maxTotal $ maxStats info
-  pure $ Stats (m - 3 * 4 - 3 * 12 - 2 * 1) 3 3 1
+  let telomeres = 1
+  let mana = 50
+  let charisma = 7
+  pure $ Stats (m - mana * 4 - charisma * 12 - telomeres * 2) mana charisma telomeres
 
 estimateNextPos :: Pos -> Vel -> Accel -> (Pos, Vel)
 estimateNextPos (x, y) (vx, vy) (bx, by)
@@ -89,11 +95,16 @@ estimateNextPos (x, y) (vx, vy) (bx, by)
       y' = y + vy'
     in ((x', y'), (vx', vy'))
 
+dmgRatio :: Pos -> Ratio Int
+dmgRatio (dx, dy) = max 0 $ max (1 - (10 % 3) * (codist % dist)) (1 - (10 % 3) * (1 - codist % dist))
+  where dist = max (abs dx) (abs dy)
+        codist = min (abs dx) (abs dy)
+
 produceMoves
   :: GameInfo
   -> [GameState] -- ^ head is most recent
   -> IO [Action]
-produceMoves info (state:_) = pure $ map orbitalControl ourShips ++ map weaponControl ourShips
+produceMoves info (state:_) = pure $ map orbitalControl ourShips ++ mapMaybe weaponControl ourShips
   where
     ourTeam = myTeam info
     p2c (Coord x y) = (fromInteger x, fromInteger y)
@@ -107,4 +118,10 @@ produceMoves info (state:_) = pure $ map orbitalControl ourShips ++ map weaponCo
     enemy = head $ filter ((ourTeam /=) . shipTeam) $ fst <$> gameShips state
     (epos, _) = estimateNextPos (p2c $ shipPos enemy) (p2c $ shipVel enemy) (0, 0)
 
-    weaponControl ship = Laser (shipId ship) (c2p epos) (shipMaxTemp ship + 3 - shipTemp ship )
+    weaponControl ship = let diffRatio = dmgRatio (epos `subpos` mpos) - (fromInteger $ shipTemp ship) % (fromInteger $ 3 + shipMaxTemp ship) in
+      if diffRatio > 0
+      then Just $ Laser (shipId ship) (c2p epos) (floor $ (fromIntegral $ 3 + shipMaxTemp ship) * diffRatio)
+      else Nothing
+      where (mpos, _) = estimateNextPos (p2c $ shipPos ship) (p2c $ shipVel ship) $ decideOrbital (p2c $ shipPos ship) (p2c $ shipVel ship) radius
+
+    subpos (x1, y1) (x2, y2) = (x1 - x2, y1 - y2)
