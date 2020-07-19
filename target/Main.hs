@@ -25,7 +25,6 @@ runHTTP mkUri req = do
     _ -> error $ "Server error: " ++ show response
 
 main = do
-  hPutStrLn stderr $(LitE . StringL <$> runIO (readProcess "git" ["rev-parse", "HEAD"] ""))
   (mkUri, skey) <- getArgs >>= \case
     [server, skey] -> pure ((\uri -> "POST " ++ server ++ uri), skey)
     [server, skey, apikey] -> pure ((\uri -> "POST " ++ server ++ uri ++ "?apiKey=" ++ apikey), skey)
