@@ -205,12 +205,21 @@ pprList = go []
         go [] (LInt i) = show i
         go els x = "(" ++ intercalate "," (pprList <$> reverse (x:els)) ++ ")"
 
-data Command = Detonate | Unk IntList | Move (Integer, Integer)
+type Id = Integer
+
+data Command = Detonate Id |
+               Unk IntList |
+               Move Id (Integer, Integer) | -- Id; Movement direction (x, y), x = -2..2, y = -2..2
+               Fire Id (Integer, Integer) Integer | -- Id; Target coords; Energy (3 lines)
+               Spawn Id Integer Integer Integer Integer -- Id; Stats (HP, mana, charismata, telomeres)
 data Requests = DoThis Integer [[Command]] deriving (Show)
 
 instance Show Command where
-    show Detonate = "Detonate"
-    show (Move v) = "Move " ++ show v
+    show (Detonate i) = show i ++ " detonates"
+    show (Move i v) = show i ++ " moves by " ++ show v
+    show (Fire i v e) = show i ++ " fires at " ++ show v ++ " " ++ show e
+    show (Spawn i hp mn ch tl) = show i ++ " spawns " ++
+                                 "HP: " ++ show hp ++ ", MN: " ++ show mn ++ ", CH: " ++ show ch ++ ", TL: " ++ show tl
     show (Unk list) = pprList list
 
 tryList :: IntList -> Maybe [IntList]
@@ -220,8 +229,26 @@ tryList (LCons x xs) = do
     return (x : xs')
 
 tryCommand :: IntList -> Command
-tryCommand (LCons (LInt 1) (LCons (LInt 0) LNil)) = Detonate
-tryCommand (LCons (LInt 0) (LCons (LInt 0) (LCons (LCons (LInt x) (LInt y)) LNil))) = Move (x, y)
+tryCommand (LCons (LInt 0) (LCons (LInt i) (LCons (LCons (LInt x) (LInt y)) LNil))) = Move i (x, y)
+tryCommand (LCons (LInt 1) (LCons (LInt i) LNil)) = Detonate i
+tryCommand (LCons (LInt 2) (LCons (LInt i) (LCons (LCons (LInt x) (LInt y)) (LCons (LInt e) LNil)))) = Fire i (x, y) e
+tryCommand (LCons
+             (LInt 3)
+             (LCons
+               (LInt i)
+               (LCons
+                 (LCons
+                   (LInt hp)
+                   (LCons
+                     (LInt mana)
+                     (LCons
+                       (LInt ch)
+                       (LCons (LInt telo) LNil)
+                     )
+                   )
+                 )
+               LNil))) =
+    Spawn i hp mana ch telo
 tryCommand list = Unk list
 
 tryInterpret (LCons (LInt 4) (LCons (LInt key) list)) = do
