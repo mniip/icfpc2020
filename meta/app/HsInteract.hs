@@ -9,6 +9,7 @@ import Control.Exception
 import System.Environment
 import Data.List
 import Data.List.Split
+import Data.Char (isSpace)
 
 data GameState = GameState
   { uiScale :: Float
@@ -86,3 +87,28 @@ main = do
       where pixel (i, j) = Translate (fromInteger i) (fromInteger (-j)) $ Polygon $ rectanglePath 1 1
 
   playIO FullScreen black 25 initGame (pure . draw) events (const pure)
+
+
+data MStruct = MList [MStruct] | MInt Integer | MCons (MStruct, MStruct) deriving (Read, Show)
+
+change :: String -> String
+change [] = []
+change ('(':xs) = "MCons (" ++ change xs
+change ('[':xs) = "MList [" ++ change xs
+change list@(x:xs) | x == ')' || x == ']' = x : change xs
+                   | isNum x = let (num, rest) = span isNum list
+                               in "MInt " ++ num ++ change rest
+                   | otherwise = x : change xs
+    where isNum y = y `elem` "+-0123456789"
+
+parseMStruct :: String -> MStruct
+parseMStruct str = read $ change str'
+    where str' = filter (not . isSpace) str
+
+parseShortList :: String -> IntList
+parseShortList = toIntList . parseMStruct
+    where listToIntList [] = LNil
+          listToIntList (x:xs) = LCons (toIntList x) (listToIntList xs)
+          toIntList (MInt n) = LInt n
+          toIntList (MCons (a, b)) = LCons (toIntList a) (toIntList b)
+          toIntList (MList xs) = listToIntList xs
