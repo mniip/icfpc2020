@@ -26,6 +26,7 @@ main = do
   runHTTP uri (ReqStart key (Just $ Stats 8 8 0 1)) >>= go uri key
   where
     go uri key (RespGame Finished _ _) = pure ()
-    go uri key (RespGame Started info status) = do
-      runHTTP uri (ReqAct key []) >>= go uri key
-
+    go uri key (RespGame Started info (Just state)) = do
+      let myShips = map fst $ filter (\(s, _) -> shipTeam s == myTeam info) $ gameShips state
+      runHTTP uri (ReqAct key [Boost (shipId s) (Coord 1 0) | s <- myShips]) >>= go uri key
+    go _ _ resp = error $ show resp

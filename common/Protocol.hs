@@ -167,10 +167,20 @@ instance Protocol Request where
     , (4, \p -> aListN 2 p >>= \[id, acts] -> ReqAct <$> fromProto id <*> fromProto acts)
     ]
 
+data StatsSettings = StatsSettings
+  { maxTotal  :: Integer
+  , unknown13 :: Integer
+  , unknown14 :: Integer
+  }
+  deriving (Eq, Show)
+instance Protocol StatsSettings where
+  toProto = error "toProto StatsSettings"
+  fromProto p = aListN 3 p >>= \[mt, u13, u14] -> StatsSettings <$> fromProto mt <*> fromProto u13 <*> fromProto u14
+
 data GameInfo = GameInfo
   { unknown1 :: IntList
   , myTeam   :: Integer
-  , unknown2 :: IntList
+  , maxStats :: StatsSettings
   , planet   :: Integer
   , field    :: Integer
   , unknown4 :: IntList
@@ -179,9 +189,9 @@ data GameInfo = GameInfo
 instance Protocol GameInfo where
   toProto = error "toProto GameInfo"
   fromProto p = do
-      [u1, team, u2, u3, u4] <- aListN 5 p
+      [u1, team, ss, u3, u4] <- aListN 5 p
       [planet, field] <- aListN 2 u3
-      GameInfo u1 <$> fromProto team <*> pure u2 <*> fromProto planet <*> fromProto field <*> pure u4
+      GameInfo u1 <$> fromProto team <*> fromProto ss <*> fromProto planet <*> fromProto field <*> pure u4
 
 data GameStatus
   = NotStarted
