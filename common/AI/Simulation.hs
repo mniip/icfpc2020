@@ -59,24 +59,37 @@ correctOrbit world (Object pos@(x, y) (vx, vy)) =
           vars = filter (\(dx, dy) -> goodOrbit world (Object pos (vx+dx, vy+dy))) vs
           rotate (a, b) = (b, -a)
           neg (a, b) = (-a, -b)
-          vecp (a, b) (c, d) = (a+c, b+d)
           grav = normalize pos
           awayAndClockwise | (abs x == abs y) || magn pos > 3*(planetR world) = (0, 0)
                            | otherwise = neg ((normalize $ (y, -x)) `vecp` grav)
 
+vecp (a, b) (c, d) = (a+c, b+d)
+
 produceInitialStats :: GameInfo -> IO Stats
-produceInitialStats gi = return $ Stats (total-2) 0 0 1
+produceInitialStats gi = return $ Stats (total-2-4*10) 10 0 1
     where total = maxTotal $ maxStats gi
 
 coordToPoint :: Coord -> Point
 coordToPoint (Coord x y) = (x, y)
 
+pointToCoord :: Point -> Coord
+pointToCoord (x, y) = Coord x y
+
 produceMoves :: GameInfo -> [GameState] -> IO [Action]
-produceMoves gi (gs:_) = return $ map shipAction myShips
+produceMoves gi (gs:_) = return $ concatMap shipAction myShips
     where t = myTeam gi
           wrld = World t (planet gi) (field gi) []
           ally sh = shipTeam sh == t
           myShips = filter ally . map fst $ gameShips gs
-          shipAction sh = let obj = Object (coordToPoint $ shipPos sh) (coordToPoint $ shipVel sh)
-                              (bx, by) = correctOrbit wrld obj
-                          in Boost (shipId sh) (Coord bx by)
+          enemyShips = filter (not . ally) . map fst $ gameShips gs
+          shipAction sh = 
+              let obj = Object (coordToPoint $ shipPos sh) (coordToPoint $ shipVel sh)
+                  (bx, by) = correctOrbit wrld obj
+                  idd = shipId sh
+                  enemy = head enemyShips
+                  epos = coordToPoint $ shipPos enemy
+                  evel = coordToPoint $ shipVel enemy
+                  epos' = epos `vecp` evel
+                  fire = if (not $ null enemyShips) && (t == 0)
+                         then [Laser idd (pointToCoord epos') 1] else []
+              in [Boost idd (Coord bx by)] ++ fire
