@@ -62,6 +62,10 @@ aListN 0 LNil                 = pure []
 aListN n (LCons x xs) | n > 0 = (x:) <$> aListN (n - 1) xs
 aListN _ _                    = empty
 
+aMaybeAsNil :: IntList -> (IntList -> Maybe a) -> Maybe (Maybe a)
+aMaybeAsNil LNil _ = pure Nothing
+aMaybeAsNil p    f = Just <$> f p
+
 aPairAsList :: (Protocol a, Protocol b) => IntList -> Maybe (a, b)
 aPairAsList p = aListN 2 p >>= \[a, b] -> (,) <$> fromProto a <*> fromProto b
 
@@ -152,13 +156,14 @@ instance Protocol Request where
   toProto (ReqAct id acts)     = toProto [LInt 4, toProto id, toProto acts]
   fromProto = aVariant
     [ (0, \_ -> pure ReqTime)
-    , (1, \p -> aListN 2 p >>= \[id, ts] -> ReqJoin <$> fromProto id <*> fromProto ts)
-    , (2, \p -> aListN 3 p >>= \[id, mStats] -> ReqStart <$> fromProto id <*> mb mStats fromProto)
-    , (3, \p -> aListN 4 p >>= \[id, acts] -> ReqAct <$> fromProto id <*> fromProto acts)
+    , (1, \p -> aList p >>= \case
+                  [num] -> ReqCreate <$> Just <$> fromProto num
+                  []    -> pure $ ReqCreate Nothing
+                  _     -> empty)
+    , (2, \p -> aListN 2 p >>= \[id, ts] -> ReqJoin <$> fromProto id <*> fromProto ts)
+    , (3, \p -> aListN 2 p >>= \[id, mStats] -> ReqStart <$> fromProto id <*> aMaybeAsNil mStats fromProto)
+    , (4, \p -> aListN 2 p >>= \[id, acts] -> ReqAct <$> fromProto id <*> fromProto acts)
     ]
-    where
-      mb LNil _ = Nothing
-      mb p    f = Just <$> f p
 
 data GameInfo = GameInfo
   { unknown1 :: IntList
@@ -200,7 +205,7 @@ instance Protocol GameState where
 data Response
   = RespError
   | RespKeys [(Integer {- Team -}, GameId)]
-  | RespGame GameStatus GameInfo GameState
+  | RespGame GameStatus GameInfo (Maybe GameState)
   deriving (Eq, Show)
 instance Protocol Response where
   toProto = error "toProto Response"
@@ -210,7 +215,7 @@ instance Protocol Response where
     ]
     where
       parseKeys p = aListN 1 p >>= \[keys] -> RespKeys <$> (fromProto keys >>= mapM aPairAsList)
-      parseGame p = aListN 3 p >>= \[status, info, state] -> RespGame <$> fromProto status <*> fromProto info <*> fromProto state
+      parseGame p = aListN 3 p >>= \[status, info, state] -> RespGame <$> fromProto status <*> fromProto info <*> aMaybeAsNil state fromProto
 
 data Ship = Ship
   { shipTeam  :: Integer

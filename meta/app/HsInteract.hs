@@ -84,7 +84,7 @@ main = do
       lift $ putStrLn $ "-> " ++ preq
       tell $ reverse $ zipWith (++) ("-> ":repeat "..... ") $ chunksOf 128 preq
       resp <- lift $ httpSender req
-      let presp = maybe (pprList req) show $ (fromProto resp :: Maybe Protocol.Response)
+      let presp = maybe (pprList resp) show $ (fromProto resp :: Maybe Protocol.Response)
       lift $ putStrLn $ "<- " ++ presp
       tell $ reverse $ zipWith (++) ("<- ":repeat "..... ") $ chunksOf 128 presp
       pure resp
