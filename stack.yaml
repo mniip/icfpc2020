@@ -3,3 +3,4 @@ resolver: lts-16.3
 packages:
 - target
 - meta
+- common

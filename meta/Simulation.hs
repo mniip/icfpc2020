@@ -1,3 +1,5 @@
+module Simulation where
+
 type Point = (Int, Int)
 
 data Object = Object {

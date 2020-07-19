@@ -2,13 +2,14 @@
 
 module Protocol where
 
-import Alien.FFI
 import Control.Monad
 import Data.Char
 import Data.List
 import Control.Monad
 import Control.Applicative
 import Data.Maybe
+
+import Common
 
 data MStruct = MList [MStruct] | MInt Integer | MCons (MStruct, MStruct) deriving (Read, Show)
 

@@ -18,6 +18,7 @@ import Data.Array.Unboxed
 import Data.Tuple
 import Control.Arrow
 
+import Common
 import Protocol
 import Blocks
 

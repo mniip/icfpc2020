@@ -16,6 +16,7 @@ dependencies:
 - unordered-containers >= 0.2
 - ghc-prim
 - gloss
+- icfpc2020-powder-common
 
 library:
   source-dirs: .

@@ -1,0 +1,20 @@
+name:                icfpc2020-powder-common
+version:             0.1.0.0
+github:              "mniip/icfpc2020"
+
+
+dependencies:
+- base >= 4.7 && < 5
+- containers >= 0.6
+- bytestring >= 0.10
+- binary >= 0.8
+- split >= 0.2
+- transformers >= 0.5
+- array >= 0.5
+- unordered-containers >= 0.2
+
+library:
+  source-dirs: .
+  exposed-modules:
+  - Common
+  - Protocol

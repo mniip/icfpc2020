@@ -12,6 +12,8 @@ import Control.Monad
 import Control.Applicative
 import Data.Maybe
 
+import Common
+
 import qualified Alien.Prelude as A
 
 -- Really more like, after WHNF, is this a closure of a constructor of some datatype, or is it still a function?
@@ -20,12 +22,6 @@ isData x = x `seq` case unpackClosure# x of
   (# infoTable, _, _ #)
     | let closType = W# (indexWord32OffAddr# infoTable 2#)
     -> closType > 0 && closType < 8 {- ClosureTypes.h: 1-7 are CONSTR_* -}
-
-data IntList
-  = LInt !Integer
-  | LCons !IntList !IntList
-  | LNil
-  deriving (Eq, Ord, Show, Read)
 
 extractIntList :: alienValue -> IntList
 extractIntList x = if isData x
@@ -36,34 +32,6 @@ injectIntList :: IntList -> alienValue
 injectIntList LNil = unsafeCoerce A.nil
 injectIntList (LCons car cdr) = unsafeCoerce A.cons (injectIntList car) (injectIntList cdr)
 injectIntList (LInt int) = unsafeCoerce int
-
-modulate :: IntList -> [Bool]
-modulate (LInt n)     = (if n >= 0 then [False, True] else [True, False])
-                        ++ replicate len True
-                        ++ [False]
-                        ++ map (testBit absn) (reverse [0 .. 4*len-1])
-                        where
-                          absn = abs n
-                          len = head $ dropWhile (\l -> 16^l <= absn) [0..]
-modulate LNil         = [False, False]
-modulate (LCons x xs) = [True, True] ++ modulate x ++ modulate xs
-
-demodulate :: [Bool] -> IntList
-demodulate = fromMaybe (error "Demodulate parse error") . evalStateT (go <* end)
-  where
-    bit = StateT uncons
-    end = StateT $ \case
-      [] -> pure ((), [])
-      _  -> empty
-    exact t = mfilter (== t) bit
-    go = liftA2 (,) bit bit >>= \case
-      (False, False) -> pure LNil
-      (True, True) -> LCons <$> go <*> go
-      (sign, _) -> LInt <$> do
-        let getLen = bit >>= \b -> if b then succ <$> getLen else pure 0
-        len <- getLen
-        mantissa <- replicateM (4 * len) bit
-        pure $ (if sign then negate else id) $ foldl' (\x y -> 2*x + if y then 1 else 0) 0 mantissa
 
 newtype Drawing = Drawing [(Integer, Integer)] deriving (Eq, Ord, Show)
 newtype AlienState = AlienState IntList deriving (Eq, Ord, Show, Read)
