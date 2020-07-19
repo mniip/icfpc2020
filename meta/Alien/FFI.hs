@@ -25,7 +25,7 @@ data IntList
   = LInt !Integer
   | LCons !IntList !IntList
   | LNil
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord, Show, Read)
 
 extractIntList :: alienValue -> IntList
 extractIntList x = if isData x
@@ -66,7 +66,7 @@ demodulate = fromMaybe (error "Demodulate parse error") . evalStateT (go <* end)
         pure $ (if sign then negate else id) $ foldl' (\x y -> 2*x + if y then 1 else 0) 0 mantissa
 
 newtype Drawing = Drawing [(Integer, Integer)] deriving (Eq, Ord, Show)
-newtype AlienState = AlienState IntList deriving (Eq, Ord, Show)
+newtype AlienState = AlienState IntList deriving (Eq, Ord, Show, Read)
 
 -- Left - want HTTP request, Right - want click
 interactWith :: alienValue -> AlienState -> IntList -> (AlienState, Either IntList [Drawing])

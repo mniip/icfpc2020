@@ -5,6 +5,8 @@ import Alien.Galaxy
 import Graphics.Gloss.Interface.IO.Game
 import Network.HTTP.Simple
 import qualified Data.ByteString.Lazy.UTF8 as BLU
+import Control.Exception
+import System.Environment
 
 data GameState = GameState
   { uiScale :: Float
@@ -14,8 +16,10 @@ data GameState = GameState
   } deriving (Eq, Ord, Show)
 
 main = do
+  initState <- getArgs >>= \case
+    [x] -> evaluate $ read x
+    _   -> pure $ AlienState LNil
   let
-    initState = AlienState LNil
     interactor = galaxy
 
     initGame = GameState { uiScale = 5, currentPictures = [], currentState = initState, mousePos = (0, 0) }
@@ -29,6 +33,12 @@ main = do
         (state', pics) -> pure $ world { currentPictures = pics, currentState = state' }
     events (EventKey (SpecialKey KeyDown) Down _ _) world = pure $ world { uiScale = uiScale world * 0.8 }
     events (EventKey (SpecialKey KeyUp) Down _ _) world = pure $ world { uiScale = uiScale world / 0.8 }
+    events (EventKey (SpecialKey KeyRight) Down _ _) world = do
+      putStrLn "Input X Y:"
+      [x, y] <- map read . words <$> getLine
+      putStrLn $ "Clicked " ++ show (x, y)
+      makeClick httpSender printState interactor (currentState world) (x, y) >>= \case
+        (state', pics) -> pure $ world { currentPictures = pics, currentState = state' }
     events _ world = pure world
 
     printState state = putStrLn $ "State: " ++ show state
@@ -54,7 +64,7 @@ main = do
       ]
 
     drawPictures pics
-      = Pictures $ zipWith Color (withAlpha 0.5 <$> cycle colors) (drawPic <$> pics)
+      = Pictures $ reverse $ zipWith Color (withAlpha 0.5 <$> cycle colors) (drawPic <$> pics)
       where
         colors = [red, green, blue, yellow, cyan, magenta, rose, violet, azure, aquamarine, chartreuse, orange]
     drawPic (Drawing coords) = Pictures $ map pixel coords
