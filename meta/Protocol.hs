@@ -227,14 +227,14 @@ data Ship = Ship
   , shipPos   :: Coord
   , shipVel   :: Coord
   , shipStats :: Stats
-  , unknown7  :: IntList
+  , temp      :: Integer
   , unknown8  :: IntList
   , unknown9  :: IntList
   }
   deriving (Eq, Show)
 instance Protocol Ship where
   toProto = error "toProto Ship"
-  fromProto p = aListN 8 p >>= \[team, id, pos, vel, stats, u7, u8, u9] -> Ship <$> fromProto team <*> fromProto id <*> fromProto pos <*> fromProto vel <*> fromProto stats <*> pure u7 <*> pure u8 <*> pure u9
+  fromProto p = aListN 8 p >>= \[team, id, pos, vel, stats, temp, u8, u9] -> Ship <$> fromProto team <*> fromProto id <*> fromProto pos <*> fromProto vel <*> fromProto stats <*> fromProto temp <*> pure u8 <*> pure u9
 
 -- Same as Action but without ship id
 data SAction
