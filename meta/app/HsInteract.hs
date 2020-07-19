@@ -21,7 +21,8 @@ import Control.Arrow
 import Blocks
 
 data GameState = GameState
-  { uiScale :: Float
+  { txtScale :: Float
+  , uiScale :: Float
   , currentPictures :: [Drawing]
   , currentState :: AlienState
   , mousePos :: (Integer, Integer)
@@ -39,7 +40,8 @@ main = do
     interactor = galaxy
 
     initGame = GameState
-      { uiScale = 5
+      { txtScale = 1
+      , uiScale = 5
       , currentPictures = []
       , currentState = initState
       , mousePos = (0, 0)
@@ -61,6 +63,8 @@ main = do
     events (EventKey (SpecialKey KeyDown) Down _ _) world = pure $ world { uiScale = uiScale world * 0.8 }
     events (EventKey (SpecialKey KeyUp) Down _ _) world = pure $ world { uiScale = uiScale world / 0.8 }
     events (EventKey (Char 's') Down _ _) world = pure $ world { showState = not $ showState world }
+    events (EventKey (Char 'q') Down _ _) world = pure $ world { txtScale = txtScale world * 0.8 }
+    events (EventKey (Char 'w') Down _ _) world = pure $ world { txtScale = txtScale world / 0.8 }
     events (EventKey (Char 'l') Down _ _) world = pure $ world { showHttpLog = not $ showHttpLog world }
     events (EventKey (Char 'n') Down _ _) world = pure $ world { showNumbers = not $ showNumbers world }
     events (EventKey (Char 'i') Down _ _) world = do
@@ -103,11 +107,11 @@ main = do
         $ Scale 0.2 0.2 $ Color white $ Text $ show (mousePos world) ]
       ++ if showState world
          then [ Translate (uiScale world * fromIntegral (fst $ mousePos world)) (-70 + uiScale world * negate (fromIntegral (snd $ mousePos world)))
-                $ Scale 0.15 0.15 $ Color white $ Pictures [Translate 0 (-200 * i) $ Text line | (i, line) <- zip [0..] $ chunksOf 128 $ pprState $ currentState world] ]
+                $ Scale (0.15 * txtScale world) (0.15 * txtScale world) $ Color white $ Pictures [Translate 0 (-200 * i) $ Text line | (i, line) <- zip [0..] $ chunksOf 128 $ pprState $ currentState world] ]
          else []
       ++ if showHttpLog world
          then [ Translate (uiScale world * fromIntegral (fst $ mousePos world)) (-70 + uiScale world * negate (fromIntegral (snd $ mousePos world)))
-                $ Scale 0.15 0.15 $ Color white $ Pictures [Translate 0 (-200 * i) $ Text line | (i, line) <- zip [0..] $ httpLog world] ]
+                $ Scale (0.15 * txtScale world) (0.15 * txtScale world) $ Color white $ Pictures [Translate 0 (-200 * i) $ Text line | (i, line) <- zip [0..] $ httpLog world] ]
          else []
       where
         pprState (AlienState state) = pprList state
