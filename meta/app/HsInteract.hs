@@ -18,6 +18,7 @@ import Data.Array.Unboxed
 import Data.Tuple
 import Control.Arrow
 
+import Protocol
 import Blocks
 
 data GameState = GameState
@@ -178,90 +179,3 @@ numValue' grid ((x1, y1), (x2, y2))
     width = x2 - x1 + 1
     height = y2 - y1 + 1
 numValue' _ _ = Nothing
-
-data MStruct = MList [MStruct] | MInt Integer | MCons (MStruct, MStruct) deriving (Read, Show)
-
-change :: String -> String
-change [] = []
-change ('(':xs) = "MCons (" ++ change xs
-change ('[':xs) = "MList [" ++ change xs
-change list@(x:xs) | x == ')' || x == ']' = x : change xs
-                   | isNum x = let (num, rest) = span isNum list
-                               in "MInt " ++ num ++ change rest
-                   | otherwise = x : change xs
-    where isNum y = y `elem` "+-0123456789"
-
-parseMStruct :: String -> MStruct
-parseMStruct str = read $ change str'
-    where str' = filter (not . isSpace) str
-
-parseShortList :: String -> IntList
-parseShortList = toIntList . parseMStruct
-    where listToIntList [] = LNil
-          listToIntList (x:xs) = LCons (toIntList x) (listToIntList xs)
-          toIntList (MInt n) = LInt n
-          toIntList (MCons (a, b)) = LCons (toIntList a) (toIntList b)
-          toIntList (MList xs) = listToIntList xs
-
-pprList = go []
-  where go els LNil = "[" ++ intercalate "," (pprList <$> reverse els) ++ "]"
-        go els (LCons x xs) = go (x:els) xs
-        go [] (LInt i) = show i
-        go els x = "(" ++ intercalate "," (pprList <$> reverse (x:els)) ++ ")"
-
-type Id = Integer
-
-data Command = Detonate Id |
-               Unk IntList |
-               Move Id (Integer, Integer) | -- Id; Movement direction (x, y), x = -2..2, y = -2..2
-               Fire Id (Integer, Integer) Integer | -- Id; Target coords; Energy (3 lines)
-               Spawn Id Integer Integer Integer Integer -- Id; Stats (HP, mana, charismata, telomeres)
-data Requests = DoThis Integer [[Command]] deriving (Show)
-
-instance Show Command where
-    show (Detonate i) = show i ++ " detonates"
-    show (Move i v) = show i ++ " moves by " ++ show v
-    show (Fire i v e) = show i ++ " fires at " ++ show v ++ " " ++ show e
-    show (Spawn i hp mn ch tl) = show i ++ " spawns " ++
-                                 "HP: " ++ show hp ++ ", MN: " ++ show mn ++ ", CH: " ++ show ch ++ ", TL: " ++ show tl
-    show (Unk list) = pprList list
-
-tryList :: IntList -> Maybe [IntList]
-tryList LNil = return []
-tryList (LCons x xs) = do
-    xs' <- tryList xs
-    return (x : xs')
-
-tryCommand :: IntList -> Command
-tryCommand (LCons (LInt 0) (LCons (LInt i) (LCons (LCons (LInt x) (LInt y)) LNil))) = Move i (x, y)
-tryCommand (LCons (LInt 1) (LCons (LInt i) LNil)) = Detonate i
-tryCommand (LCons (LInt 2) (LCons (LInt i) (LCons (LCons (LInt x) (LInt y)) (LCons (LInt e) LNil)))) = Fire i (x, y) e
-tryCommand (LCons
-             (LInt 3)
-             (LCons
-               (LInt i)
-               (LCons
-                 (LCons
-                   (LInt hp)
-                   (LCons
-                     (LInt mana)
-                     (LCons
-                       (LInt ch)
-                       (LCons (LInt telo) LNil)
-                     )
-                   )
-                 )
-               LNil))) =
-    Spawn i hp mana ch telo
-tryCommand list = Unk list
-
-tryInterpret (LCons (LInt 4) (LCons (LInt key) list)) = do
-    bots <- tryList list
-    cmds <- mapM tryList bots
-    let cmdint = map (map tryCommand) cmds
-    return (DoThis key cmdint)
-tryInterpret ls = Nothing
-
-showInterpret ls = case tryInterpret ls of
-                       Just r -> show r
-                       Nothing -> pprList ls
