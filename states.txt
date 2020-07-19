@@ -1,17 +1,17 @@
 Main menu:
-AlienState (LCons (LInt 2) (LCons (LCons (LInt 1) (LCons (LInt (-1)) LNil)) (LCons (LInt 0) (LCons LNil LNil))))
+[2,[1,-1],0,[]]
 
 Just beaten tictactoe:
-AlienState (LCons (LInt 3) (LCons (LCons (LInt 2) (LCons (LCons (LInt 2) (LCons (LInt 1) (LCons (LInt 1) (LCons (LInt 1) (LCons (LInt 2) (LCons (LInt 2) (LCons (LInt 1) (LCons (LInt 2) (LCons (LInt 1) LNil))))))))) (LCons (LCons (LInt 6860065) (LCons (LInt 6862459) (LCons (LInt 6862465) (LCons (LInt 7549537) (LCons (LInt 7551595) (LCons (LInt 7551937) (LCons (LInt 7566001) (LCons (LInt 7568353) (LCons (LInt 7683601) (LCons (LInt 12493153) (LCons (LInt 12493195) (LCons (LInt 12610459) LNil)))))))))))) (LCons (LInt 103652820) LNil)))) (LCons (LInt 0) (LCons LNil LNil))))
+[3,[2,[2,1,1,1,2,2,1,2,1],[6860065,6862459,6862465,7549537,7551595,7551937,7566001,7568353,7683601,12493153,12493195,12610459],103652820],0,[]]
 
 Main menu after tictactoe:
-AlienState (LCons (LInt 2) (LCons (LCons (LInt 1) (LCons (LInt (-1)) LNil)) (LCons (LInt 0) (LCons (LCons (LInt 103652820) LNil) LNil))))
+[2,[1,-1],0,[103652820]]
 
 Just beaten matching pairs:
-AlienState (LCons (LInt 4) (LCons (LCons (LInt 2) (LCons (LCons (LInt 122) (LCons (LInt 203) (LCons (LInt 410) (LCons (LInt 164) (LCons (LInt 444) (LCons (LInt 484) (LCons (LInt 202) (LCons (LInt 77) (LCons (LInt 251) (LCons (LInt 56) (LCons (LInt 456) (LCons (LInt 435) (LCons (LInt 28) (LCons (LInt 329) (LCons (LInt 257) (LCons (LInt 265) (LCons (LInt 501) (LCons (LInt 18) (LCons (LInt 190) (LCons (LInt 423) (LCons (LInt 384) (LCons (LInt 434) (LCons (LInt 266) (LCons (LInt 69) (LCons (LInt 34) (LCons (LInt 437) (LCons (LInt 203) (LCons (LInt 152) (LCons (LInt 160) (LCons (LInt 425) (LCons (LInt 245) (LCons (LInt 428) (LCons (LInt 99) (LCons (LInt 107) (LCons (LInt 192) (LCons (LInt 372) (LCons (LInt 346) (LCons (LInt 344) (LCons (LInt 169) (LCons (LInt 478) (LCons (LInt 393) (LCons (LInt 502) (LCons (LInt 201) (LCons (LInt 497) (LCons (LInt 313) (LCons (LInt 32) (LCons (LInt 281) (LCons (LInt 510) (LCons (LInt 436) (LCons (LInt 22) (LCons (LInt 237) (LCons (LInt 80) (LCons (LInt 325) (LCons (LInt 405) (LCons (LInt 184) (LCons (LInt 358) (LCons (LInt 57) (LCons (LInt 276) (LCons (LInt 359) (LCons (LInt 189) (LCons (LInt 284) (LCons (LInt 277) (LCons (LInt 198) (LCons (LInt 244) LNil)))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))) (LCons (LInt (-1)) (LCons (LInt 192496425430) (LCons (LCons (LInt 192) (LCons (LInt 384) (LCons (LInt 437) (LCons (LInt 497) (LCons (LInt 456) (LCons (LInt 201) (LCons (LInt 428) (LCons (LInt 107) (LCons (LInt 34) (LCons (LInt 160) (LCons (LInt 77) (LCons (LInt 329) (LCons (LInt 203) (LCons (LInt 203) (LCons (LInt 122) (LCons (LInt 410) LNil)))))))))))))))) LNil))))) (LCons (LInt 0) (LCons (LCons (LInt 192496425430) LNil) LNil))))
+[4,[2,[122,203,410,164,444,484,202,77,251,56,456,435,28,329,257,265,501,18,190,423,384,434,266,69,34,437,203,152,160,425,245,428,99,107,192,372,346,344,169,478,393,502,201,497,313,32,281,510,436,22,237,80,325,405,184,358,57,276,359,189,284,277,198,244],-1,192496425430,[192,384,437,497,456,201,428,107,34,160,77,329,203,203,122,410]],0,[192496425430]]
 
 Main menu after matching pairs:
-AlienState (LCons (LInt 2) (LCons (LCons (LInt 1) (LCons (LInt (-1)) LNil)) (LCons (LInt 0) (LCons (LCons (LInt 192496425430) LNil) LNil))))
+[2,[1,-1],0,[192496425430]]
 
 Main menu with both tictactoe and matching pairs:
-AlienState (LCons (LInt 2) (LCons (LCons (LInt 1) (LCons (LInt (-1)) LNil)) (LCons (LInt 0) (LCons (LCons (LInt 103652820) (LCons (LInt 192496425430) LNil)) LNil))))
+[2,[1,-1],0,[103652820,192496425430]]
