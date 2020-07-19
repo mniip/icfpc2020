@@ -16,13 +16,16 @@ data World = World {
              objects :: [Object]
              } deriving (Show)
 
+magn :: Point -> Integer
+magn (x, y) = max (abs x) (abs y)
+
 normalize :: Point -> Point
 normalize v@(x, y) = if m == 0 then v else (x `quot` m, y `quot` m)
-    where m = max (abs x) (abs y)
+    where m = magn v
 
 addGrav :: Object -> Object
 addGrav (Object c@(x, y) v@(vx, vy)) = Object c v'
-    where m = max (abs x) (abs y)
+    where m = magn c
           dx = x `quot` m
           dy = y `quot` m
           v' = if m == 0 then v else (vx-dx, vy-dy)
@@ -55,7 +58,11 @@ correctOrbit world (Object pos@(x, y) (vx, vy)) =
     where vs = [(dx, dy) | dx <- [-1..1], dy <- [-1..1]]
           vars = filter (\(dx, dy) -> goodOrbit world (Object pos (vx+dx, vy+dy))) vs
           rotate (a, b) = (b, -a)
-          awayAndClockwise = rotate $ normalize pos
+          neg (a, b) = (-a, -b)
+          vecp (a, b) (c, d) = (a+c, b+d)
+          grav = normalize pos
+          awayAndClockwise | (abs x == abs y) || magn pos > 3*(planetR world) = (0, 0)
+                           | otherwise = neg ((normalize $ (y, -x)) `vecp` grav)
 
 produceInitialStats :: GameInfo -> IO Stats
 produceInitialStats gi = return $ Stats (total-2) 0 0 1
