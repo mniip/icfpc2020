@@ -45,8 +45,10 @@ main = do
 
     events (EventMotion mouse) world = pure $ world { mousePos = mapMouse world mouse }
     events (EventKey (MouseButton LeftButton) Down _ mouse) world = do
-      putStrLn $ "Clicked " ++ show (mapMouse world mouse)
-      runWriterT (makeClick httpSenderLog (lift . printState) interactor (currentState world) (mapMouse world mouse)) >>= \case
+      let mouseCoords = mapMouse world mouse
+      putStrLn $ "Clicked " ++ show mouseCoords
+      hPutStrLn stderr (show (fst mouseCoords) ++ " " ++ show (snd mouseCoords))
+      runWriterT (makeClick httpSenderLog (lift . printState) interactor (currentState world) mouseCoords) >>= \case
         ((state', pics), log) -> pure $ world { currentPictures = pics, currentState = state', httpLog = take 50 $ reverse log ++ httpLog world }
     events (EventKey (SpecialKey KeyDown) Down _ _) world = pure $ world { uiScale = uiScale world * 0.8 }
     events (EventKey (SpecialKey KeyUp) Down _ _) world = pure $ world { uiScale = uiScale world / 0.8 }
