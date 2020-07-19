@@ -1,8 +1,11 @@
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE LambdaCase, TemplateHaskell #-}
 import System.Environment
 import Network.HTTP.Simple
 import Data.ByteString.Lazy.UTF8 as BLU
 import Control.Exception
+import System.IO
+import Language.Haskell.TH
+import System.Process
 import Common
 import Protocol
 
@@ -20,6 +23,7 @@ runHTTP uri req = do
     _ -> error $ "Server error: " ++ show response
 
 main = do
+  hPutStrLn stderr $(LitE . StringL <$> runIO (readProcess "git" ["rev-parse", "HEAD"] ""))
   [uri, skey] <- getArgs
   let key = GameId $ read skey
   let
