@@ -9,6 +9,8 @@ import System.Process
 import Common
 import Protocol
 
+import AI.Orbital
+
 runHTTP :: (String -> String) -> Protocol.Request -> IO Protocol.Response
 runHTTP mkUri req = do
   let sreq = map (\case True -> '1'; False -> '0') $ modulate $ toProto req
