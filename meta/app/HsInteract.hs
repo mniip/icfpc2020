@@ -25,7 +25,7 @@ data GameState = GameState
 
 main = do
   initState <- getArgs >>= \case
-    [x] -> evaluate $ read x
+    [x] -> AlienState <$> evaluate (parseShortList x)
     _   -> pure $ AlienState LNil
   let
     interactor = galaxy
@@ -55,11 +55,11 @@ main = do
       putStrLn "Input X Y:"
       [x, y] <- map read . words <$> getLine
       putStrLn $ "Clicked " ++ show (x, y)
-      makeClick httpSender printState interactor (currentState world) (x, y) >>= \case
-        (state', pics) -> pure $ world { currentPictures = pics, currentState = state' }
+      runWriterT (makeClick httpSenderLog (lift . printState) interactor (currentState world) (x, y)) >>= \case
+        ((state', pics), log) -> pure $ world { currentPictures = pics, currentState = state', httpLog = take 50 $ reverse log ++ httpLog world }
     events _ world = pure world
 
-    printState state = putStrLn $ "State: " ++ show state
+    printState (AlienState state) = putStrLn $ "State: " ++ pprList state
 
     httpSenderLog req = do
       lift $ putStrLn $ "-> " ++ pprList req
@@ -70,7 +70,7 @@ main = do
       pure resp
 
     httpSender req = do
-      putStrLn $ "Sending " ++ show req
+      putStrLn $ "Sending " ++ pprList req
       let modReq = map (\case True -> '1'; False -> '0') $ modulate req
       putStrLn $ "Sending raw " ++ modReq
       request <- setRequestBodyLBS (BLU.fromString modReq) <$> parseRequest ("POST https://icfpc2020-api.testkontur.ru/aliens/send?apiKey=5b1e7596cd5446e18dd969e5fcede90b")
@@ -80,7 +80,7 @@ main = do
           let modResp = BLU.toString $ getResponseBody response
           putStrLn $ "Received raw " ++ show modResp
           let resp = demodulate $ (== '1') <$> modResp
-          putStrLn $ "Received " ++ show resp
+          putStrLn $ "Received " ++ pprList resp
           pure resp
         _ -> error $ "Server error: " ++ show response
 
@@ -98,12 +98,6 @@ main = do
          else []
       where
         pprState (AlienState state) = pprList state
-
-    pprList = go []
-      where go els LNil = "[" ++ intercalate "," (pprList <$> reverse els) ++ "]"
-            go els (LCons x xs) = go (x:els) xs
-            go [] (LInt i) = show i
-            go els x = "(" ++ intercalate "," (pprList <$> reverse (x:els)) ++ ")"
 
     drawPictures pics
       = Pictures $ reverse $ zipWith Color (withAlpha 0.5 <$> cycle colors) (drawPic <$> pics)
@@ -138,3 +132,9 @@ parseShortList = toIntList . parseMStruct
           toIntList (MInt n) = LInt n
           toIntList (MCons (a, b)) = LCons (toIntList a) (toIntList b)
           toIntList (MList xs) = listToIntList xs
+
+pprList = go []
+  where go els LNil = "[" ++ intercalate "," (pprList <$> reverse els) ++ "]"
+        go els (LCons x xs) = go (x:els) xs
+        go [] (LInt i) = show i
+        go els x = "(" ++ intercalate "," (pprList <$> reverse (x:els)) ++ ")"
