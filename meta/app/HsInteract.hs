@@ -9,6 +9,7 @@ import Control.Monad.Trans.Writer
 import Control.Monad.Trans.Class
 import Control.Exception
 import System.Environment
+import System.IO (hPutStrLn, stderr)
 import Data.List
 import Data.List.Split
 import Data.Char (isSpace)
@@ -55,6 +56,7 @@ main = do
       putStrLn "Input X Y:"
       [x, y] <- map read . words <$> getLine
       putStrLn $ "Clicked " ++ show (x, y)
+      hPutStrLn stderr (show x ++ " " ++ show y)
       runWriterT (makeClick httpSenderLog (lift . printState) interactor (currentState world) (x, y)) >>= \case
         ((state', pics), log) -> pure $ world { currentPictures = pics, currentState = state', httpLog = take 50 $ reverse log ++ httpLog world }
     events _ world = pure world
