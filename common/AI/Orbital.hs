@@ -77,9 +77,9 @@ decideOrbital pos vel radius
 produceInitialStats :: GameInfo -> IO Stats
 produceInitialStats info = do
   let m = maxTotal $ maxStats info
-  let telomeres = 1
-  let mana = 50
-  let charisma = 7
+  let telomeres = 2
+  let mana = 30
+  let charisma = 10
   pure $ Stats (m - mana * 4 - charisma * 12 - telomeres * 2) mana charisma telomeres
 
 estimateNextPos :: Pos -> Vel -> Accel -> (Pos, Vel)
@@ -104,7 +104,7 @@ produceMoves
   :: GameInfo
   -> [GameState] -- ^ head is most recent
   -> IO [Action]
-produceMoves info (state:_) = pure $ map orbitalControl ourShips ++ mapMaybe weaponControl ourShips
+produceMoves info (state:_) = pure $ telomereCommands ++ orbitalCommands ++ weaponCommands
   where
     ourTeam = myTeam info
     p2c (Coord x y) = (fromInteger x, fromInteger y)
@@ -112,15 +112,25 @@ produceMoves info (state:_) = pure $ map orbitalControl ourShips ++ mapMaybe wea
     negatec2p (x, y) = Coord (toInteger (-x)) (toInteger (-y))
     radius = fromInteger $ planet info
 
+    weaponCommands = mapMaybe weaponControl ourShips
+    orbitalCommands = mapMaybe orbitalControl ourShips
+    telomereCommands = telomereControl ourShips
+
+    telomereControl [ship] | [] <- orbitalCommands = [Mitosis (shipId ship) $ Stats (hitpoints (shipStats ship) `div` 2) (mana (shipStats ship) `div` 2) (charisma (shipStats ship) `div` 2) 1]
+    telomereControl [ship1, ship2] | shipPos ship1 == shipPos ship2 = [Boost (shipId ship1) (Coord 0 1)]
+    telomereControl _ = []
+
     ourShips = filter ((ourTeam ==) . shipTeam) $ fst <$> gameShips state
-    orbitalControl ship = Boost (shipId ship) $ negatec2p $ decideOrbital (p2c $ shipPos ship) (p2c $ shipVel ship) radius
+    orbitalControl ship = case negatec2p $ decideOrbital (p2c $ shipPos ship) (p2c $ shipVel ship) radius of
+      Coord 0 0 -> Nothing
+      coord     -> Just $ Boost (shipId ship) coord
 
     enemy = head $ filter ((ourTeam /=) . shipTeam) $ fst <$> gameShips state
     (epos, _) = estimateNextPos (p2c $ shipPos enemy) (p2c $ shipVel enemy) (0, 0)
 
     weaponControl ship = let diffRatio = dmgRatio (epos `subpos` mpos) - (fromInteger $ shipTemp ship) % (fromInteger $ 3 + shipMaxTemp ship) in
       if diffRatio > 0
-      then Just $ Laser (shipId ship) (c2p epos) (floor $ (fromIntegral $ 3 + shipMaxTemp ship) * diffRatio)
+      then Just $ Laser (shipId ship) (c2p epos) (min (mana $ shipStats ship) $ floor $ (fromIntegral $ 3 + shipMaxTemp ship) * diffRatio)
       else Nothing
       where (mpos, _) = estimateNextPos (p2c $ shipPos ship) (p2c $ shipVel ship) $ decideOrbital (p2c $ shipPos ship) (p2c $ shipVel ship) radius
 
