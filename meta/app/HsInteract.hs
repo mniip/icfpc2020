@@ -66,11 +66,11 @@ main = do
     printState (AlienState state) = putStrLn $ "State: " ++ pprList state
 
     httpSenderLog req = do
-      lift $ putStrLn $ "-> " ++ pprList req
-      tell $ reverse $ zipWith (++) ("-> ":repeat "..... ") $ chunksOf 128 $ pprList req
+      lift $ putStrLn $ "-> " ++ showInterpret req
+      tell $ reverse $ zipWith (++) ("-> ":repeat "..... ") $ chunksOf 128 $ showInterpret req
       resp <- lift $ httpSender req
-      lift $ putStrLn $ "<- " ++ pprList resp
-      tell $ reverse $ zipWith (++) ("<- ":repeat "..... ") $ chunksOf 128 $ pprList resp
+      lift $ putStrLn $ "<- " ++ showInterpret resp
+      tell $ reverse $ zipWith (++) ("<- ":repeat "..... ") $ chunksOf 128 $ showInterpret resp
       pure resp
 
     httpSender req = do
@@ -142,3 +142,33 @@ pprList = go []
         go els (LCons x xs) = go (x:els) xs
         go [] (LInt i) = show i
         go els x = "(" ++ intercalate "," (pprList <$> reverse (x:els)) ++ ")"
+
+data Command = Detonate | Unk IntList | Move (Integer, Integer)
+data Requests = DoThis Integer [[Command]] deriving (Show)
+
+instance Show Command where
+    show Detonate = "Detonate"
+    show (Move v) = "Move " ++ show v
+    show (Unk list) = pprList list
+
+tryList :: IntList -> Maybe [IntList]
+tryList LNil = return []
+tryList (LCons x xs) = do
+    xs' <- tryList xs
+    return (x : xs')
+
+tryCommand :: IntList -> Command
+tryCommand (LCons (LInt 1) (LCons (LInt 0) LNil)) = Detonate
+tryCommand (LCons (LInt 0) (LCons (LInt 0) (LCons (LCons (LInt x) (LInt y)) LNil))) = Move (x, y)
+tryCommand list = Unk list
+
+tryInterpret (LCons (LInt 4) (LCons (LInt key) list)) = do
+    bots <- tryList list
+    cmds <- mapM tryList bots
+    let cmdint = map (map tryCommand) cmds
+    return (DoThis key cmdint)
+tryInterpret ls = Nothing
+
+showInterpret ls = case tryInterpret ls of
+                       Just r -> show r
+                       Nothing -> pprList ls
