@@ -7,12 +7,15 @@ import Network.HTTP.Simple
 import qualified Data.ByteString.Lazy.UTF8 as BLU
 import Control.Exception
 import System.Environment
+import Data.List
+import Data.List.Split
 
 data GameState = GameState
   { uiScale :: Float
   , currentPictures :: [Drawing]
   , currentState :: AlienState
   , mousePos :: (Integer, Integer)
+  , showState :: Bool
   } deriving (Eq, Ord, Show)
 
 main = do
@@ -22,7 +25,7 @@ main = do
   let
     interactor = galaxy
 
-    initGame = GameState { uiScale = 5, currentPictures = [], currentState = initState, mousePos = (0, 0) }
+    initGame = GameState { uiScale = 5, currentPictures = [], currentState = initState, mousePos = (0, 0), showState = False }
 
     mapMouse world (x, y) = (floor $ x / uiScale world + 0.5, floor $ -y / uiScale world + 0.5)
 
@@ -33,7 +36,8 @@ main = do
         (state', pics) -> pure $ world { currentPictures = pics, currentState = state' }
     events (EventKey (SpecialKey KeyDown) Down _ _) world = pure $ world { uiScale = uiScale world * 0.8 }
     events (EventKey (SpecialKey KeyUp) Down _ _) world = pure $ world { uiScale = uiScale world / 0.8 }
-    events (EventKey (SpecialKey KeyRight) Down _ _) world = do
+    events (EventKey (Char 's') Down _ _) world = pure $ world { showState = not $ showState world }
+    events (EventKey (Char 'i') Down _ _) world = do
       putStrLn "Input X Y:"
       [x, y] <- map read . words <$> getLine
       putStrLn $ "Clicked " ++ show (x, y)
@@ -58,10 +62,21 @@ main = do
           pure resp
         _ -> error $ "Server error: " ++ show response
 
-    draw world = Pictures
+    draw world = Pictures $
       [ Scale (uiScale world) (uiScale world) $ drawPictures (currentPictures world)
-      , Translate (uiScale world * fromIntegral (fst $ mousePos world)) (uiScale world * negate (fromIntegral (snd $ mousePos world))) $ Scale 0.2 0.2 $ Color white $ Text $ show (mousePos world)
-      ]
+      , Translate (uiScale world * fromIntegral (fst $ mousePos world)) (uiScale world * negate (fromIntegral (snd $ mousePos world)))
+        $ Scale 0.2 0.2 $ Color white $ Text $ show (mousePos world)
+      ] ++ if showState world
+           then [ Translate (uiScale world * fromIntegral (fst $ mousePos world)) (-70 + uiScale world * negate (fromIntegral (snd $ mousePos world)))
+                  $ Scale 0.15 0.15 $ Color white $ Text $ unlines $ chunksOf 100 $ pprState $ currentState world ]
+           else []
+      where
+        pprState (AlienState state) = pprList state
+        pprList = go []
+          where go els LNil = "[" ++ intercalate "," (pprList <$> reverse els) ++ "]"
+                go els (LCons x xs) = go (x:els) xs
+                go [] (LInt i) = show i
+                go els x = "(" ++ intercalate "," (pprList <$> reverse (x:els)) ++ ")"
 
     drawPictures pics
       = Pictures $ reverse $ zipWith Color (withAlpha 0.5 <$> cycle colors) (drawPic <$> pics)
