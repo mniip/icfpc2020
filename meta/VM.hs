@@ -17,6 +17,7 @@ import Data.Array.Unboxed
 import Numeric.Natural
 import qualified Data.HashMap.Strict as HM
 import Data.Unique
+import qualified Data.Set as S
 
 import Constants
 
@@ -43,7 +44,7 @@ newFun arity entry = newClosure $ ClosureFun arity [] entry
 data ClosureData
   = ClosureInt Integer
   | ClosureBits (UArray Int Bool)
-  | ClosureImage (UArray (Int, Int) Bool)
+  | ClosureImage (UArray Int Int) (UArray Int Int)
   | ClosureFun Int [Closure] EntryCode
   -- ^ unsaturated arity, partially applied arguments
   | ClosureAlias Closure
@@ -61,7 +62,7 @@ newtype Globals = Globals { getGlobals :: HM.HashMap Natural Closure }
 isWhnf :: ClosureData -> Bool
 isWhnf (ClosureInt _) = True
 isWhnf (ClosureBits _) = True
-isWhnf (ClosureImage _) = True
+isWhnf (ClosureImage _ _) = True
 isWhnf (ClosureFun n _ _) = n /= 0
 isWhnf (ClosureAlias _) = False
 
@@ -69,7 +70,7 @@ whnf :: Globals -> Closure -> IO ()
 whnf glob self = readClosure self >>= \case
   ClosureInt _ -> pure ()
   ClosureBits _ -> pure ()
-  ClosureImage _ -> pure ()
+  ClosureImage _ _ -> pure ()
   ClosureFun n args entry -> if n == 0
                              then enterUpdate glob args entry self
                              else pure ()
@@ -107,8 +108,7 @@ enterUpdate glob args (EntryBuiltin f) self = do
 pprClosureData :: ClosureData -> String
 pprClosureData (ClosureInt i) = show i
 pprClosureData (ClosureBits bits) = "[" ++ map (\b -> if b then '1' else '0') (elems bits) ++ "]"
-pprClosureData (ClosureImage image) = "Image (" ++ show w ++ "x" ++ show h ++ ")"
-  where (w, h) = bounds image
+pprClosureData (ClosureImage _ _) = "Image ..."
 pprClosureData (ClosureFun n _ entry) = (if n == 0 then "Thunk" else "Fun/" ++ show n) ++ " " ++ pprEntry entry
   where
     pprEntry (EntryGlobal i) = ":" ++ show i
@@ -228,19 +228,25 @@ whnfPpr glob clos = do
     ClosureInt i -> putStr $ show i
     -- ClosureBits bits -> putStr $ "[" ++ map (\b -> if b then '▀' else '▄') (elems bits) ++ "]"
     ClosureBits bits -> putStr $ "[" ++ map (\b -> if b then '1' else '0') (elems bits) ++ "]"
-    ClosureImage image | let ((minx, miny), (maxx, maxy)) = bounds image
-      -> do putStrLn ""
-            putStrLn $ "┌" ++ replicate (3 * (maxx - minx + 1)) '─' ++ "┐"
-            forM_ [miny..maxy] $ \y -> do
-              putStr "│"
-              forM_ [minx..maxx] $ \x ->
-                putStr $ (if image ! (x, y) then "\x1B[107;30m" else "") ++ (take 3 $ show x ++ repeat ' ') ++ "\x1B[0m"
-              putStrLn "│"
-              putStr "│"
-              forM_ [minx..maxx] $ \x ->
-                putStr $ (if image ! (x, y) then "\x1B[107;30m" else "") ++ (take 3 $ show y ++ repeat ' ') ++ "\x1B[0m"
-              putStrLn "│"
-            putStrLn $ "└" ++ replicate (3 * (maxx - minx + 1)) '─' ++ "┘"
+    ClosureImage axs ays -> do
+      let
+          xs = elems axs; ys = elems ays
+          minx = minimum $ 0 : xs; maxx = maximum $ 0 : ys
+          miny = minimum $ 0 : ys; maxy = maximum $ 0 : ys
+          pixels = S.fromList $ zip xs ys
+      forM_ [miny-1..maxy+1] $ \y -> do
+        putStr ""
+        forM_ [minx-1..maxx+1] $ \x -> do
+          let char
+                | x == minx && y == miny = '┌'
+                | x == maxx && y == miny = '┐'
+                | x == minx && y == maxy = '└'
+                | x == maxx && y == maxy = '┘'
+                | x == minx || x == maxx = if y == 0 then '┼' else '│'
+                | y == miny || y == maxy = if x == 0 then '┼' else '─'
+                | (x, y) `S.member` pixels = '█'
+                | otherwise = ' '
+          putChar char
     cd -> do
       targ <- newThunk $ EntryGlobal isNilOpNum `EntryApply` EntryValue clos
       whnfBool' glob targ >>= \case
@@ -266,7 +272,7 @@ whnfPpr glob clos = do
             ClosureInt i | i == no   -> pure $ Just False
                          | i == yes  -> pure $ Just True
             _                        -> pure $ Nothing
-
+{-
 whnfUglyPrint :: Globals -> Closure -> IO ()
 whnfUglyPrint glob clos = do
   whnf glob clos
@@ -278,6 +284,7 @@ whnfUglyPrint glob clos = do
             hPutStrLn stderr (show minx ++ " " ++ show miny ++ " " ++ show maxx ++ " " ++ show maxy)
             hPutStrLn stderr $ map (\b -> if b then '1' else '0') $ elems image
     _ -> return ()
+-}
 
 mkGlobals :: IO Globals
 mkGlobals = do
@@ -397,11 +404,8 @@ mkGlobals = do
     builtinDem _ args _ = error $ "Expected 1 argument, got " ++ show (length args)
     builtinImage glob [x] self = do
       coords <- mapM (whnfCoords glob <=< whnfPair glob) =<< whnfList glob x
-      let cs = (0, 0) : coords
-      let minx = fromInteger $ minimum $ fst <$> cs; miny = fromInteger $ minimum $ snd <$> cs; maxx = fromInteger $ maximum $ fst <$> cs; maxy = fromInteger $ maximum $ snd <$> cs
-      let r = ((minx, miny), (maxx, maxy))
-      let contents = [(toInteger x, toInteger y) `elem` coords | (x, y) <- range r]
-      updateClosure self $ ClosureImage $ listArray r contents
+      let (xs, ys) = unzip coords; r = (0, length coords - 1)
+      updateClosure self $ ClosureImage (listArray r $ fromIntegral <$> xs) (listArray r $ fromIntegral <$> ys)
       where whnfCoords glob (x, y) = (,) <$> whnfInteger glob x <*> whnfInteger glob y
 
     builtinImage _ args _ = error $ "Expected 1 argument, got " ++ show (length args)

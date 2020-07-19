@@ -143,7 +143,7 @@ interaction globals name moves = do
     getPic glob clos = do
       whnf glob clos
       readClosure clos >>= \case
-        ClosureImage pic -> pure pic
+        ClosureImage xs ys -> pure (xs, ys)
 
 runProgram :: [String] -> IO ()
 runProgram strs = do
@@ -153,7 +153,7 @@ runProgram strs = do
 clicksMVar :: MVar (Integer, Integer)
 clicksMVar = unsafePerformIO newEmptyMVar
 
-picsMVar :: MVar [UArray (Int, Int) Bool]
+picsMVar :: MVar [(UArray Int Int, UArray Int Int)]
 picsMVar = unsafePerformIO newEmptyMVar
 
 uiThread :: IO ()
@@ -162,9 +162,11 @@ uiThread = playIO FullScreen black 25 (5, []) (pure . drawArrs) events timestep
     drawArrs (scale, arrs) = Scale scale scale $ Pictures $
                              zipWith Color (cycle $ withAlpha 0.5 <$>
                              [red, green, blue, yellow, cyan, magenta, rose, violet, azure, aquamarine, chartreuse, orange]) (drawArr <$> arrs)
-    drawArr :: UArray (Int, Int) Bool -> Picture
-    drawArr arr = Pictures [Translate (fromIntegral i) (fromIntegral (-j)) $ Polygon $ rectanglePath 1 1 | i <- [minx..maxx], j <- [miny..maxy], arr ! (i, j)]
-      where ((minx, miny), (maxx, maxy)) = bounds arr
+    drawArr :: (UArray Int Int, UArray Int Int) -> Picture
+    drawArr (axs, ays) = Pictures [Translate (fromIntegral i) (fromIntegral (-j)) $ Polygon $ rectanglePath 1 1 | (i, j) <- coords]
+      where
+        xs = elems axs; ys = elems ays
+        coords = zip xs ys
 
     events (EventKey (MouseButton LeftButton) Down _ (x, y)) (scale, world) = do
       putMVar clicksMVar (floor $ x / scale + 0.5, floor $ -y / scale + 0.5)
