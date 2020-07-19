@@ -29,15 +29,14 @@ main = do
     [server, skey, apikey] -> pure ((\uri -> "POST " ++ server ++ uri ++ "?apiKey=" ++ apikey), skey)
   let key = GameId $ read skey
   let
-    go (RespGame Finished _ _) = pure ()
-    go (RespGame Started info (Just state)) = do
+    go _ (RespGame Finished _ _) = pure ()
+    go history (RespGame Started info (Just state)) = do
+      actions <- produceMoves info (state:history)
       let myShips = map fst $ filter (\(s, _) -> shipTeam s == myTeam info) $ gameShips state
-      runHTTP mkUri (ReqAct key [Boost (shipId s) (quadrant (shipPos s)) | s <- myShips]) >>= go
-    go resp = error $ show resp
+      runHTTP mkUri (ReqAct key actions) >>= go (state:history)
+    go _ resp = error $ show resp
   runHTTP mkUri (ReqJoin key [103652820,192496425430]) >>= \case
     RespGame NotStarted info _ -> do
-      let m = maxTotal $ maxStats info
-      runHTTP mkUri (ReqStart key (Just $ Stats (m - 2) 0 0 1)) >>= go
+      stats <- produceInitialStats info
+      runHTTP mkUri (ReqStart key $ Just stats) >>= go []
     resp -> error $ show resp
-    where
-      quadrant (Coord x y) = Coord (-signum x * (if abs x >= abs y then 1 else 0)) (-signum y * (if abs y >= abs x then 1 else 0))
