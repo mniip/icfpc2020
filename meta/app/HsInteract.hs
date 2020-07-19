@@ -5,6 +5,8 @@ import Alien.Galaxy
 import Graphics.Gloss.Interface.IO.Game
 import Network.HTTP.Simple
 import qualified Data.ByteString.Lazy.UTF8 as BLU
+import Control.Monad.Trans.Writer
+import Control.Monad.Trans.Class
 import Control.Exception
 import System.Environment
 import Data.List
@@ -17,6 +19,8 @@ data GameState = GameState
   , currentState :: AlienState
   , mousePos :: (Integer, Integer)
   , showState :: Bool
+  , showHttpLog :: Bool
+  , httpLog :: [String]
   } deriving (Eq, Ord, Show)
 
 main = do
@@ -26,18 +30,27 @@ main = do
   let
     interactor = galaxy
 
-    initGame = GameState { uiScale = 5, currentPictures = [], currentState = initState, mousePos = (0, 0), showState = False }
+    initGame = GameState
+      { uiScale = 5
+      , currentPictures = []
+      , currentState = initState
+      , mousePos = (0, 0)
+      , showState = False
+      , showHttpLog = False
+      , httpLog = []
+      }
 
     mapMouse world (x, y) = (floor $ x / uiScale world + 0.5, floor $ -y / uiScale world + 0.5)
 
     events (EventMotion mouse) world = pure $ world { mousePos = mapMouse world mouse }
     events (EventKey (MouseButton LeftButton) Down _ mouse) world = do
       putStrLn $ "Clicked " ++ show (mapMouse world mouse)
-      makeClick httpSender printState interactor (currentState world) (mapMouse world mouse) >>= \case
-        (state', pics) -> pure $ world { currentPictures = pics, currentState = state' }
+      runWriterT (makeClick httpSenderLog (lift . printState) interactor (currentState world) (mapMouse world mouse)) >>= \case
+        ((state', pics), log) -> pure $ world { currentPictures = pics, currentState = state', httpLog = take 50 $ reverse log ++ httpLog world }
     events (EventKey (SpecialKey KeyDown) Down _ _) world = pure $ world { uiScale = uiScale world * 0.8 }
     events (EventKey (SpecialKey KeyUp) Down _ _) world = pure $ world { uiScale = uiScale world / 0.8 }
     events (EventKey (Char 's') Down _ _) world = pure $ world { showState = not $ showState world }
+    events (EventKey (Char 'l') Down _ _) world = pure $ world { showHttpLog = not $ showHttpLog world }
     events (EventKey (Char 'i') Down _ _) world = do
       putStrLn "Input X Y:"
       [x, y] <- map read . words <$> getLine
@@ -47,6 +60,14 @@ main = do
     events _ world = pure world
 
     printState state = putStrLn $ "State: " ++ show state
+
+    httpSenderLog req = do
+      lift $ putStrLn $ "-> " ++ pprList req
+      tell $ reverse $ zipWith (++) ("-> ":repeat "..... ") $ chunksOf 128 $ pprList req
+      resp <- lift $ httpSender req
+      lift $ putStrLn $ "<- " ++ pprList resp
+      tell $ reverse $ zipWith (++) ("<- ":repeat "..... ") $ chunksOf 128 $ pprList resp
+      pure resp
 
     httpSender req = do
       putStrLn $ "Sending " ++ show req
@@ -66,18 +87,23 @@ main = do
     draw world = Pictures $
       [ Scale (uiScale world) (uiScale world) $ drawPictures (currentPictures world)
       , Translate (uiScale world * fromIntegral (fst $ mousePos world)) (uiScale world * negate (fromIntegral (snd $ mousePos world)))
-        $ Scale 0.2 0.2 $ Color white $ Text $ show (mousePos world)
-      ] ++ if showState world
-           then [ Translate (uiScale world * fromIntegral (fst $ mousePos world)) (-70 + uiScale world * negate (fromIntegral (snd $ mousePos world)))
-                  $ Scale 0.15 0.15 $ Color white $ Text $ unlines $ chunksOf 100 $ pprState $ currentState world ]
-           else []
+        $ Scale 0.2 0.2 $ Color white $ Text $ show (mousePos world) ]
+      ++ if showState world
+         then [ Translate (uiScale world * fromIntegral (fst $ mousePos world)) (-70 + uiScale world * negate (fromIntegral (snd $ mousePos world)))
+                $ Scale 0.15 0.15 $ Color white $ Pictures [Translate 0 (-200 * i) $ Text line | (i, line) <- zip [0..] $ chunksOf 128 $ pprState $ currentState world] ]
+         else []
+      ++ if showHttpLog world
+         then [ Translate (uiScale world * fromIntegral (fst $ mousePos world)) (-70 + uiScale world * negate (fromIntegral (snd $ mousePos world)))
+                $ Scale 0.15 0.15 $ Color white $ Pictures [Translate 0 (-200 * i) $ Text line | (i, line) <- zip [0..] $ httpLog world] ]
+         else []
       where
         pprState (AlienState state) = pprList state
-        pprList = go []
-          where go els LNil = "[" ++ intercalate "," (pprList <$> reverse els) ++ "]"
-                go els (LCons x xs) = go (x:els) xs
-                go [] (LInt i) = show i
-                go els x = "(" ++ intercalate "," (pprList <$> reverse (x:els)) ++ ")"
+
+    pprList = go []
+      where go els LNil = "[" ++ intercalate "," (pprList <$> reverse els) ++ "]"
+            go els (LCons x xs) = go (x:els) xs
+            go [] (LInt i) = show i
+            go els x = "(" ++ intercalate "," (pprList <$> reverse (x:els)) ++ ")"
 
     drawPictures pics
       = Pictures $ reverse $ zipWith Color (withAlpha 0.5 <$> cycle colors) (drawPic <$> pics)
