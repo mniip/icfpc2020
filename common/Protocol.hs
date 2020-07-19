@@ -94,6 +94,7 @@ instance (Protocol a, Protocol b) => Protocol (a, b) where
 
 instance Protocol a => Protocol [a] where
   toProto (x:xs) = LCons (toProto x) (toProto xs)
+  toProto []     = LNil
   fromProto (LCons x xs) = (:) <$> fromProto x <*> fromProto xs
   fromProto LNil = pure []
   fromProto _ = empty
