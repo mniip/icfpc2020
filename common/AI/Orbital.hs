@@ -65,6 +65,15 @@ opQuad East = West
 opQuad South = North
 opQuad West = East
 
+orbitOk :: Pos -> Vel -> (Int -> Bool) -> Bool
+orbitOk ipos ivel pred
+  = simulateOrbit (Identity ipos) (Identity ivel) 0 $ \(Identity pos) (Identity vel) i ->
+    if pred $ l1Dist pos
+    then Left True
+    else if i > 50
+         then Left False
+         else Right (i + 1, Identity (0, 0))
+
 collidesWithConstantBoost :: Pos -> Vel -> RelativePos -> (Int -> Bool) -> Bool
 collidesWithConstantBoost ipos ivel accel pred
   = simulateOrbit (Identity ipos) (Identity ivel) 0 $ \(Identity pos) (Identity vel) i ->
@@ -118,7 +127,7 @@ produceInitialStats info = do
   let defence = myTeam info == 1
   let ammo = if defence then 0 else 50
   let cooling = if defence then 0 else 7
-  let telomeres = if defence then (m - 10) `div` 3 else 2
+  let telomeres = if defence then (m - 10) `div` 4 else 1
   pure $ Stats
     { fuel = (m - ammo * 4 - cooling * 12 - telomeres * 2)
     , ammo
@@ -163,26 +172,24 @@ produceMoves info (state:_) = pure $ telomereCommands ++ orbitalCommands ++ weap
 
     weaponCommands = mapMaybe weaponControl ourShips
     orbitalCommands = mapMaybe orbitalControl ourShips
-    telomereCommands = if ourTeam == 1
-                       then concatMap telomereControl ourShips ++ concatMap telomereControlSpread ourShips
+    telomereCommands = if not isAttacker {- spread mode -}
+                       then concatMap telomereControlSpread ourShips
                        else []
 
     randpm1 n = [-1, 0, 1] !! (fromIntegral (n `mod` 3))
 
     telomereControlSpread ship =
-        let coinciding = filter (\s -> shipPos ship == shipPos s && shipVel ship == shipVel s) ourShips
+        let coinciding = filter (\s -> shipPos ship == shipPos s && shipVel ship == shipVel s && telomeres (shipStats s) > 0) ourShips
             best = maximumBy (compare `on` (\s -> (fuel $ shipStats s) % (telomeres $ shipStats s))) coinciding
             ShipId id = shipId ship
-        in if (orbitalControl ship == Nothing) -- && (ship == best)
-           then [Boost (shipId ship) (Coord (randpm1 id) (randpm1 (id+1)))] -- not random 
+        in if orbitalControl ship == Nothing
+           then if length coinciding > 1 && (ship == best)
+             then [Boost (shipId ship) (Coord (randpm1 id) (randpm1 (id+1)))] -- not random 
+             else [Mitosis (shipId ship) $ Stats (fuel (shipStats ship) `div` 2) (ammo (shipStats ship) `div` 2) (cooling (shipStats ship) `div` 2) (telomeres (shipStats ship) `div` 2) | telomeres (shipStats ship) > 1]
            else []
 
-    telomereControl ship | orbitalControl ship == Nothing = 
-        [Mitosis (shipId ship) $ Stats (fuel (shipStats ship) `div` 2) (ammo (shipStats ship) `div` 2) (cooling (shipStats ship) `div` 2) 1]
-                         | otherwise = []
-
     ourShips = filter ((ourTeam ==) . shipTeam) $ fst <$> gameShips state
-    orbitalControl ship = case negatec2p $ decideOrbital (p2c $ shipPos ship) (p2c $ shipVel ship) radius of
+    orbitalControl ship = case negatec2p $ decideOrbital (p2c $ shipPos ship) (p2c $ shipVel ship) (if isAttacker then radius else radius + 5) of
       Coord 0 0 -> if isAttacker && shipTemp ship < shipMaxTemp ship `div` 2 {- seek -}
         then Just $ Boost (shipId ship) $ negatec2p $ fst $ decideSeeker (p2c $ shipPos ship) (p2c $ shipVel ship) (p2c $ shipPos enemy) (p2c $ shipVel enemy) radius
         else Nothing
