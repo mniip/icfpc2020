@@ -2,6 +2,7 @@
 
 import Alien.FFI
 import Alien.Galaxy
+import Alien.Galaxy2
 import Graphics.Gloss.Interface.IO.Game hiding (Point)
 import Network.HTTP.Simple
 import qualified Data.ByteString.Lazy.UTF8 as BLU
@@ -39,7 +40,7 @@ main = do
     [x] -> AlienState <$> evaluate (parseShortList x)
     _   -> pure $ AlienState LNil
   let
-    interactor = galaxy
+    interactor = galaxy2
 
     initGame = GlossState
       { txtScale = 1
