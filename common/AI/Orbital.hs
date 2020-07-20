@@ -77,9 +77,11 @@ collidesWithConstantBoost ipos ivel accel pred
 decideOrbital :: Pos -> Vel -> Int -> Accel
 decideOrbital pos vel radius
   | not $ collidesWithConstantBoost pos vel (0, 0) (<= radius) =
-    if not $ collidesWithConstantBoost pos vel (0, 0) (> 128)
+    if not $ collidesWithConstantBoost pos vel (0, 0) (>= 128)
     then (0, 0)
-    else relatePos (-1, 0) quad
+    else if not $ collidesWithConstantBoost pos vel (-1, 0) (>= 128)
+         then relatePos (-1, 0) quad
+         else relatePos (-2, 0) quad
   | not $ collidesWithConstantBoost pos vel (0, tangential) (<= radius) = relatePos (0, tangential) quad
   | not $ collidesWithConstantBoost pos vel (1, tangential) (<= radius) = relatePos (1, tangential) quad
   | not $ collidesWithConstantBoost pos vel (1, 2 * tangential) (<= radius) = relatePos (1, 2 * tangential) quad
@@ -101,9 +103,9 @@ decideSeeker pos vel epos evel radius =
   where
     minAttainedDist accel = simulateOrbit (Pair pos epos) (Pair vel evel) (0, l1Dist $ subPos pos epos)
       $ \(Pair pos epos) (Pair vel evel) (i, minDist) ->
-        if l1Dist pos <= radius
+        if l1Dist pos <= radius || l1Dist pos >= 128
         then Left 10000
-        else if i > 30
+        else if i > 10
           then Left $ min minDist $ l1Dist $ subPos pos epos
           else Right ((i + 1, min minDist $ l1Dist $ subPos pos epos), Pair (if i == 0 then accel else (0, 0)) (0, 0))
     comp (b1, m1) (b2, m2) = if m1 <= 4 && m2 <= 4
@@ -181,7 +183,7 @@ produceMoves info (state:_) = pure $ telomereCommands ++ orbitalCommands ++ weap
 
     ourShips = filter ((ourTeam ==) . shipTeam) $ fst <$> gameShips state
     orbitalControl ship = case negatec2p $ decideOrbital (p2c $ shipPos ship) (p2c $ shipVel ship) radius of
-      Coord 0 0 -> if isAttacker {- seek -}
+      Coord 0 0 -> if isAttacker && shipTemp ship < shipMaxTemp ship `div` 2 {- seek -}
         then Just $ Boost (shipId ship) $ negatec2p $ fst $ decideSeeker (p2c $ shipPos ship) (p2c $ shipVel ship) (p2c $ shipPos enemy) (p2c $ shipVel enemy) radius
         else Nothing
       coord     -> Just $ Boost (shipId ship) coord
