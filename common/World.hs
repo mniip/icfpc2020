@@ -1,4 +1,4 @@
-module Simulation where
+module World where
 
 import Data.List (sortBy)
 import Data.Function (on)
