@@ -12,10 +12,13 @@ dependencies:
 - transformers >= 0.5
 - array >= 0.5
 - unordered-containers >= 0.2
+- random >= 1.1
+- comonad >= 5.0
 
 library:
   source-dirs: .
   exposed-modules:
   - Common
   - Protocol
+  - MCTS
   - AI.Orbital
