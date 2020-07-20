@@ -9,6 +9,9 @@ type Point = (Int, Int)
 
 (x, y) `vecp` (a, b) = (x+a, y+b)
 
+norm :: Point -> Int
+norm (x, y) =  max (abs x) (abs y)
+
 dist :: Point -> Point -> Int
 dist (x, y) (a, b) = max (abs $ x-a) (abs $ y-b)
 
@@ -38,6 +41,10 @@ data Move
   | Mitosis Int Stats
   deriving (Eq, Ord, Show)
 
+isBoost :: Move -> Bool
+isBoost (Boost _ _) = True
+isBoost _ = False
+
 -- Must be sorted
 type Moves = [Move]
 
@@ -52,8 +59,8 @@ moveShip (Boost id pos) world =
                   obj' = Object t c v' tp' s' mtp
 moveShip _ world = world
 
-detonateShip :: Int -> World -> World
-detonateShip id world = M.delete id world -- TODO: damage from explosion
+detonateShip :: Move -> World -> World
+detonateShip (Detonate id) world = M.delete id world -- TODO: damage from explosion
 
 damageStats :: Object -> Object
 damageStats (Object t c v tp s mtp) = Object t c v tp' s' mtp
@@ -82,9 +89,34 @@ laserShip _ world = world
 mitosisShip :: Move -> World -> World
 mitosisShip move world = world -- TODO
 
+cooldownShip :: Object -> Object
+cooldownShip (Object t c v tp s mtp) = Object t c v (max 0 (tp - charisma s)) s mtp
+
 cooldownShips :: World -> World
-cooldownShips = fmap cool
-    where cool (Object t c v tp s mtp) = Object t c v (max 0 (tp - charisma s)) s mtp
+cooldownShips = fmap cooldownShip
+
+applyVel :: Object -> Object
+applyVel (Object t c v tp s mtp) = Object t (c `vecp` v) v tp s mtp
+
+applyGrav :: Object -> Object
+applyGrav (Object t c v tp s mtp) = Object t c v' tp s mtp
+    where (vx, vy) = v
+          n = norm v
+          gv = (vx `quot` n, vy `quot` n)
+          v' = v `vecp` gv
+
+updatePhysics :: World -> World
+updatePhysics = fmap (applyVel . applyGrav)
+
+doAction :: Move -> World -> World
+doAction move@(Detonate _) = detonateShip move 
+doAction move@(Laser _ _ _) = laserShip move
+doAction move@(Mitosis _ _) = mitosisShip move
 
 tickWorld :: Moves -> Moves -> World -> World
-tickWorld moveA moveB world = undefined
+tickWorld moveA moveB world = world'
+    where moves = moveA ++ moveB
+          boosts = filter isBoost moves
+          actions = filter (not . isBoost) moves
+          worldMoved = updatePhysics $ foldr moveShip world boosts
+          world' = foldr doAction worldMoved actions
