@@ -55,13 +55,13 @@ unrelatePos (x, y) = \case
 subPos :: Pos -> Pos -> Vel
 subPos (x1, y1) (x2, y2) = (x1 - x2, y1 - y2)
 
-manhattanDist :: Pos -> Int
-manhattanDist (x, y) = max (abs x) (abs y)
+l1Dist :: Pos -> Int
+l1Dist (x, y) = max (abs x) (abs y)
 
 collidesWithConstantBoost :: Pos -> Vel -> Accel -> Int -> Bool
 collidesWithConstantBoost ipos ivel accel radius
   = simulateOrbit (Identity ipos) (Identity ivel) () $ \(Identity pos) (Identity vel) () ->
-    if manhattanDist pos <= radius
+    if l1Dist pos <= radius
     then Left True
     else if l1Quadrant pos /= initQuad
          then Left False
@@ -87,19 +87,20 @@ instance Applicative Pair where
   pure x = Pair x x
   Pair f g <*> Pair x y = Pair (f x) (g y)
 
-decideSeeker :: Pos -> Vel -> Pos -> Vel -> Int -> (Int, Accel)
+decideSeeker :: Pos -> Vel -> Pos -> Vel -> Int -> (Accel, Int)
 decideSeeker pos vel epos evel radius =
-  case minimumBy (comparing snd) $ map (id &&& minAttainedDist) [(i, j) | i <- [-2..2], j <- [-2..2]] of
-    (accel, dist) | dist > 4  -> (dist, accel)
-                  | otherwise -> (minAttainedDist (0, 0), (0, 0))
+  minimumBy comp $ map (id &&& minAttainedDist) [(i, j) | i <- [-2..2], j <- [-2..2]]
   where
-    minAttainedDist accel = simulateOrbit (Pair pos epos) (Pair vel evel) (0, manhattanDist $ subPos pos epos)
+    minAttainedDist accel = simulateOrbit (Pair pos epos) (Pair vel evel) (0, l1Dist $ subPos pos epos)
       $ \(Pair pos epos) (Pair vel evel) (i, minDist) ->
-        if manhattanDist pos <= radius
+        if l1Dist pos <= radius
         then Left 10000
         else if i > 30
-          then Left $ min minDist $ manhattanDist $ subPos pos epos
-          else Right ((i + 1, min minDist $ manhattanDist $ subPos pos epos), Pair (if i == 0 then accel else (0, 0)) (0, 0))
+          then Left $ min minDist $ l1Dist $ subPos pos epos
+          else Right ((i + 1, min minDist $ l1Dist $ subPos pos epos), Pair (if i == 0 then accel else (0, 0)) (0, 0))
+    comp (b1, m1) (b2, m2) = if m1 <= 4 && m2 <= 4
+      then compare (l1Dist b1) (l1Dist b2)
+      else compare m1 m2
 
 produceInitialStats :: GameInfo -> IO Stats
 produceInitialStats info = do
@@ -158,7 +159,7 @@ produceMoves info (state:_) = pure $ telomereCommands ++ orbitalCommands ++ weap
     ourShips = filter ((ourTeam ==) . shipTeam) $ fst <$> gameShips state
     orbitalControl ship = case negatec2p $ decideOrbital (p2c $ shipPos ship) (p2c $ shipVel ship) radius of
       Coord 0 0 -> if isAttacker {- seek -}
-        then Just $ Boost (shipId ship) $ negatec2p $ snd $ decideSeeker (p2c $ shipPos ship) (p2c $ shipVel ship) (p2c $ shipPos enemy) (p2c $ shipVel enemy) radius
+        then Just $ Boost (shipId ship) $ negatec2p $ fst $ decideSeeker (p2c $ shipPos ship) (p2c $ shipVel ship) (p2c $ shipPos enemy) (p2c $ shipVel enemy) radius
         else Nothing
       coord     -> Just $ Boost (shipId ship) coord
 
