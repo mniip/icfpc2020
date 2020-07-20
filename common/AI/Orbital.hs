@@ -58,23 +58,30 @@ subPos (x1, y1) (x2, y2) = (x1 - x2, y1 - y2)
 l1Dist :: Pos -> Int
 l1Dist (x, y) = max (abs x) (abs y)
 
-collidesWithConstantBoost :: Pos -> Vel -> Accel -> Int -> Bool
-collidesWithConstantBoost ipos ivel accel radius
-  = simulateOrbit (Identity ipos) (Identity ivel) () $ \(Identity pos) (Identity vel) () ->
-    if l1Dist pos <= radius
+opQuad :: L1Quadrant -> L1Quadrant
+opQuad North = South
+opQuad East = West
+opQuad South = North
+opQuad West = East
+
+collidesWithConstantBoost :: Pos -> Vel -> RelativePos -> (Int -> Bool) -> Bool
+collidesWithConstantBoost ipos ivel accel pred
+  = simulateOrbit (Identity ipos) (Identity ivel) 0 $ \(Identity pos) (Identity vel) i ->
+    if pred $ l1Dist pos
     then Left True
-    else if l1Quadrant pos /= initQuad
+    else if i > 30
          then Left False
-         else Right ((), Identity accel)
-  where
-    initQuad = l1Quadrant ipos
+         else Right (i + 1, Identity $ relatePos accel $ l1Quadrant pos)
 
 decideOrbital :: Pos -> Vel -> Int -> Accel
 decideOrbital pos vel radius
-  | not $ collidesWithConstantBoost pos vel (0, 0) radius = (0, 0)
-  | not $ collidesWithConstantBoost pos vel (relatePos (0, tangential) quad) radius = relatePos (0, tangential) quad
-  | not $ collidesWithConstantBoost pos vel (relatePos (1, tangential) quad) radius = relatePos (1, tangential) quad
-  | not $ collidesWithConstantBoost pos vel (relatePos (1, 2 * tangential) quad) radius = relatePos (1, 2 * tangential) quad
+  | not $ collidesWithConstantBoost pos vel (0, 0) (<= radius) =
+    if not $ collidesWithConstantBoost pos vel (0, 0) (> 128)
+    then (0, 0)
+    else relatePos (-1, 0) quad
+  | not $ collidesWithConstantBoost pos vel (0, tangential) (<= radius) = relatePos (0, tangential) quad
+  | not $ collidesWithConstantBoost pos vel (1, tangential) (<= radius) = relatePos (1, tangential) quad
+  | not $ collidesWithConstantBoost pos vel (1, 2 * tangential) (<= radius) = relatePos (1, 2 * tangential) quad
   | otherwise = relatePos (2, 2 * tangential) quad
   where
     quad = l1Quadrant pos
