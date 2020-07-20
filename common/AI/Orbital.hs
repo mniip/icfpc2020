@@ -1,10 +1,13 @@
-{-# LANGUAGE LambdaCase, NamedFieldPuns #-}
+{-# LANGUAGE LambdaCase, NamedFieldPuns, BangPatterns #-}
 
 module AI.Orbital where
 
 import Data.Ratio
 import Data.Maybe
 import Data.List
+import Data.Functor.Identity
+import Data.Ord
+import Control.Arrow
 
 import Protocol
 
@@ -12,13 +15,13 @@ type Pos = (Int, Int)
 type Vel = (Int, Int)
 type Accel = (Int, Int)
 
-simulateOrbit :: Pos -> Vel -> a -> (Pos -> Vel -> a -> Either b (a, Accel)) -> b
-simulateOrbit pos vel val boost
+simulateOrbit :: Applicative f => f Pos -> f Vel -> a -> (f Pos -> f Vel -> a -> Either b (a, f Accel)) -> b
+simulateOrbit !pos !vel val boost
   = case boost pos vel val of
        Left ret -> ret
        Right (val', bs)
-         -> case estimateNextPos pos vel bs of
-              (pos', vel') -> simulateOrbit pos' vel' val' boost
+         -> let posvel' = estimateNextPos <$> pos <*> vel <*> bs in
+            simulateOrbit (fst <$> posvel') (snd <$> posvel') val' boost
 
 data L1Quadrant = North | East | South | West deriving (Eq, Show)
 
@@ -49,17 +52,20 @@ unrelatePos (x, y) = \case
   South -> (y, -x)
   West -> (-x, -y)
 
+subPos :: Pos -> Pos -> Vel
+subPos (x1, y1) (x2, y2) = (x1 - x2, y1 - y2)
+
 manhattanDist :: Pos -> Int
 manhattanDist (x, y) = max (abs x) (abs y)
 
 collidesWithConstantBoost :: Pos -> Vel -> Accel -> Int -> Bool
 collidesWithConstantBoost ipos ivel accel radius
-  = simulateOrbit ipos ivel () $ \pos vel () ->
+  = simulateOrbit (Identity ipos) (Identity ivel) () $ \(Identity pos) (Identity vel) () ->
     if manhattanDist pos <= radius
     then Left True
     else if l1Quadrant pos /= initQuad
          then Left False
-         else Right ((), accel)
+         else Right ((), Identity accel)
   where
     initQuad = l1Quadrant ipos
 
@@ -74,6 +80,26 @@ decideOrbital pos vel radius
     quad = l1Quadrant pos
     tangential = if snd (unrelatePos vel quad) >= 0 then 1 else -1
 
+data Pair a = Pair !a !a
+instance Functor Pair where
+  fmap f (Pair x y) = Pair (f x) (f y)
+instance Applicative Pair where
+  pure x = Pair x x
+  Pair f g <*> Pair x y = Pair (f x) (g y)
+
+decideSeeker :: Pos -> Vel -> Pos -> Vel -> Int -> (Int, Accel)
+decideSeeker pos vel epos evel radius =
+  case minimumBy (comparing snd) $ map (id &&& minAttainedDist) [(i, j) | i <- [-2..2], j <- [-2..2]] of
+    (accel, dist) | dist > 4  -> (dist, accel)
+                  | otherwise -> (minAttainedDist (0, 0), (0, 0))
+  where
+    minAttainedDist accel = simulateOrbit (Pair pos epos) (Pair vel evel) (0, manhattanDist $ subPos pos epos)
+      $ \(Pair pos epos) (Pair vel evel) (i, minDist) ->
+        if manhattanDist pos <= radius
+        then Left 10000
+        else if i > 30
+          then Left $ min minDist $ manhattanDist $ subPos pos epos
+          else Right ((i + 1, min minDist $ manhattanDist $ subPos pos epos), Pair (if i == 0 then accel else (0, 0)) (0, 0))
 
 produceInitialStats :: GameInfo -> IO Stats
 produceInitialStats info = do
@@ -115,7 +141,7 @@ produceMoves
   :: GameInfo
   -> [GameState] -- ^ head is most recent
   -> IO [Action]
-produceMoves info (state:_) = pure $ map orbitalControl ourShips ++ mapMaybe weaponControl ourShips
+produceMoves info (state:_) = pure $ telomereCommands ++ orbitalCommands ++ weaponCommands
   where
     ourTeam = myTeam info
     p2c (Coord x y) = (fromInteger x, fromInteger y)
@@ -123,23 +149,35 @@ produceMoves info (state:_) = pure $ map orbitalControl ourShips ++ mapMaybe wea
     negatec2p (x, y) = Coord (toInteger (-x)) (toInteger (-y))
     radius = fromInteger $ planet info
 
+    weaponCommands = mapMaybe weaponControl ourShips
+    orbitalCommands = mapMaybe orbitalControl ourShips
+    telomereCommands = telomereControl ourShips
+
+    telomereControl _ = []
+
     ourShips = filter ((ourTeam ==) . shipTeam) $ fst <$> gameShips state
-    orbitalControl ship = Boost (shipId ship) $ negatec2p $ decideOrbital (p2c $ shipPos ship) (p2c $ shipVel ship) radius
+    orbitalControl ship = case negatec2p $ decideOrbital (p2c $ shipPos ship) (p2c $ shipVel ship) radius of
+      Coord 0 0 -> if isAttacker {- seek -}
+        then Just $ Boost (shipId ship) $ negatec2p $ snd $ decideSeeker (p2c $ shipPos ship) (p2c $ shipVel ship) (p2c $ shipPos enemy) (p2c $ shipVel enemy) radius
+        else Nothing
+      coord     -> Just $ Boost (shipId ship) coord
 
     enemy = head $ filter ((ourTeam /=) . shipTeam) $ fst <$> gameShips state
     (epos, _) = estimateNextPos (p2c $ shipPos enemy) (p2c $ shipVel enemy) (0, 0)
 
-    weaponControl ship = case reverse $ sortOn snd [(pow, hitValue $ fromIntegral $ expectedDamage delta $ fromIntegral pow) | pow <- [0 .. min (ammo $ shipStats ship) (cooling (shipStats ship) + shipMaxTemp ship - shipTemp ship)]] of
+    weaponControl ship = case reverse $ sortOn snd [(pow, hitValue pow $ fromIntegral $ expectedDamage delta $ fromIntegral pow) | pow <- [0 .. min (ammo $ shipStats ship) (cooling (shipStats ship) + shipMaxTemp ship - shipTemp ship)]] of
       (pow, Just _):_ -> Just $ Laser (shipId ship) (c2p epos) pow
       _               -> Nothing
       where
         (mpos, _) = estimateNextPos (p2c $ shipPos ship) (p2c $ shipVel ship) $ decideOrbital (p2c $ shipPos ship) (p2c $ shipVel ship) radius
-        delta = subpos mpos epos
+        delta = subPos mpos epos
 
-    hitValue dmg
+    hitValue pow dmg
       | dmg <= 0 = Nothing -- pointless
-      | dmg <= cooled = Just (0, dmg) -- absorbed by coolant
-      | dmg - cooled <= tempBuffer = Just (1, dmg) -- heats, no damage
+      | dmg <= cooled = Nothing -- absorbed by coolant
+      | dmg - cooled <= tempBuffer = if pow > dmg - cooled -- heats, no damage
+          then Nothing -- heats us more than them
+          else Just (1, dmg) -- heats them more than us
       | dmg - cooled - tempBuffer < hitpoints = Just (2, dmg) -- damage, no kill
       | dmg - cooled - tempBuffer - hitpoints < 10 = Just (3, dmg) -- kill (add 10 extra to be sure)
       | otherwise = Nothing -- overkill
@@ -148,5 +186,3 @@ produceMoves info (state:_) = pure $ map orbitalControl ourShips ++ mapMaybe wea
             hitpoints = fuel (shipStats enemy) + ammo (shipStats enemy) + cooling (shipStats enemy) + telomeres (shipStats enemy)
 
     isAttacker = ourTeam == 0
-
-    subpos (x1, y1) (x2, y2) = (x1 - x2, y1 - y2)
