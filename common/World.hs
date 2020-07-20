@@ -113,10 +113,33 @@ doAction move@(Detonate _) = detonateShip move
 doAction move@(Laser _ _ _) = laserShip move
 doAction move@(Mitosis _ _) = mitosisShip move
 
-tickWorld :: Moves -> Moves -> World -> World
-tickWorld moveA moveB world = world'
+insideSq :: Int -> Point -> Bool
+insideSq radius (x, y) = -radius <= x && x <= radius && -radius <= y && y <= radius
+
+isAlive :: Int -> Int -> Object -> Bool
+isAlive planet field (Object t c v tp s mtp) =
+    not (insideSq planet c) &&
+    insideSq field c && -- TODO
+    telomeres s > 0
+
+cleanWorld :: Int -> Int -> World -> World
+cleanWorld planet field = M.filter (isAlive planet field)
+
+-- Planet rad., field rad., ally moves, enemy moves, world.
+tickWorld :: Int -> Int -> Moves -> Moves -> World -> World
+tickWorld planet field moveA moveB world = world'
     where moves = moveA ++ moveB
           boosts = filter isBoost moves
           actions = filter (not . isBoost) moves
-          worldMoved = updatePhysics $ foldr moveShip world boosts
+          worldMoved = (cleanWorld planet field) . updatePhysics $ foldr moveShip world boosts
           world' = foldr doAction worldMoved actions
+
+enemyShips :: Bool -> World -> [Object]
+enemyShips myteam world = filter (\o -> team o /= myteam) . map snd $ M.toList world
+
+possibleMoves :: Bool -> World -> Int -> Moves
+possibleMoves myteam world id = undefined
+    where dirs = [Boost id (dx, dy) | dx <- [-1..1], dy <- [-1..1]]
+          det = [Detonate id]
+          enemyCoords = map (\o -> (coord o) `vecp` (vel o)) $ enemyShips myteam world
+          targets = [(x+dx, y+dy) | (x, y) <- enemyCoords, dx <- [-2..2], dy <- [-2..2]]
