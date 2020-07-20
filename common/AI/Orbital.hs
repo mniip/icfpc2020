@@ -1,9 +1,10 @@
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE LambdaCase, NamedFieldPuns #-}
 
 module AI.Orbital where
 
 import Data.Ratio
 import Data.Maybe
+import Data.List
 
 import Protocol
 
@@ -78,9 +79,14 @@ produceInitialStats :: GameInfo -> IO Stats
 produceInitialStats info = do
   let m = maxTotal $ maxStats info
   let telomeres = 1
-  let mana = 50
-  let charisma = 7
-  pure $ Stats (m - mana * 4 - charisma * 12 - telomeres * 2) mana charisma telomeres
+  let ammo = 50
+  let cooling = 7
+  pure $ Stats
+    { fuel = (m - ammo * 4 - cooling * 12 - telomeres * 2)
+    , ammo
+    , cooling
+    , telomeres
+    }
 
 estimateNextPos :: Pos -> Vel -> Accel -> (Pos, Vel)
 estimateNextPos (x, y) (vx, vy) (bx, by)
@@ -95,8 +101,13 @@ estimateNextPos (x, y) (vx, vy) (bx, by)
       y' = y + vy'
     in ((x', y'), (vx', vy'))
 
-dmgRatio :: Pos -> Ratio Int
-dmgRatio (dx, dy) = max 0 $ max (1 - (10 % 3) * (codist % dist)) (1 - (10 % 3) * (1 - codist % dist))
+expectedDamage :: Pos -> Int -> Int
+expectedDamage (dx, dy) pow = floor $ (max 0 $ (3 * pow - dist) % 1) * dmgAngleRatio (dx, dy)
+  where dist = max (abs dx) (abs dy)
+
+dmgAngleRatio :: Pos -> Ratio Int
+dmgAngleRatio (0, 0) = 1
+dmgAngleRatio (dx, dy) = max 0 $ max (1 - (10 % 3) * (codist % dist)) (1 - (10 % 3) * (1 - codist % dist))
   where dist = max (abs dx) (abs dy)
         codist = min (abs dx) (abs dy)
 
@@ -118,10 +129,24 @@ produceMoves info (state:_) = pure $ map orbitalControl ourShips ++ mapMaybe wea
     enemy = head $ filter ((ourTeam /=) . shipTeam) $ fst <$> gameShips state
     (epos, _) = estimateNextPos (p2c $ shipPos enemy) (p2c $ shipVel enemy) (0, 0)
 
-    weaponControl ship = let diffRatio = dmgRatio (epos `subpos` mpos) - (fromInteger $ shipTemp ship) % (fromInteger $ 3 + shipMaxTemp ship) in
-      if diffRatio > 0
-      then Just $ Laser (shipId ship) (c2p epos) (floor $ (fromIntegral $ 3 + shipMaxTemp ship) * diffRatio)
-      else Nothing
-      where (mpos, _) = estimateNextPos (p2c $ shipPos ship) (p2c $ shipVel ship) $ decideOrbital (p2c $ shipPos ship) (p2c $ shipVel ship) radius
+    weaponControl ship = case reverse $ sortOn snd [(pow, hitValue $ fromIntegral $ expectedDamage delta $ fromIntegral pow) | pow <- [0 .. min (ammo $ shipStats ship) (cooling (shipStats ship) + shipMaxTemp ship - shipTemp ship)]] of
+      (pow, Just _):_ -> Just $ Laser (shipId ship) (c2p epos) pow
+      _               -> Nothing
+      where
+        (mpos, _) = estimateNextPos (p2c $ shipPos ship) (p2c $ shipVel ship) $ decideOrbital (p2c $ shipPos ship) (p2c $ shipVel ship) radius
+        delta = subpos mpos epos
+
+    hitValue dmg
+      | dmg <= 0 = Nothing -- pointless
+      | dmg <= cooled = Just (0, dmg) -- absorbed by coolant
+      | dmg - cooled <= tempBuffer = Just (1, dmg) -- heats, no damage
+      | dmg - cooled - tempBuffer < hitpoints = Just (2, dmg) -- damage, no kill
+      | dmg - cooled - tempBuffer - hitpoints < 10 = Just (3, dmg) -- kill (add 10 extra to be sure)
+      | otherwise = Nothing -- overkill
+      where cooled = cooling (shipStats enemy)
+            tempBuffer = shipMaxTemp enemy - shipTemp enemy
+            hitpoints = fuel (shipStats enemy) + ammo (shipStats enemy) + cooling (shipStats enemy) + telomeres (shipStats enemy)
+
+    isAttacker = ourTeam == 0
 
     subpos (x1, y1) (x2, y2) = (x1 - x2, y1 - y2)
