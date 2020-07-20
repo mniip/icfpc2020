@@ -115,15 +115,15 @@ instance Protocol ShipId where
   fromProto p = ShipId <$> anInt p
 
 data Stats = Stats
-  { hitpoints :: Integer
-  , mana      :: Integer
-  , charisma  :: Integer
+  { fuel      :: Integer
+  , ammo      :: Integer
+  , cooling   :: Integer
   , telomeres :: Integer
   }
   deriving (Eq, Show)
 instance Protocol Stats where
-  toProto Stats{..} = toProto [hitpoints, mana, charisma, telomeres]
-  fromProto p = aListN 4 p >>= (\[hitpoints, mana, charisma, telomeres] -> Stats <$> fromProto hitpoints <*> fromProto mana <*> fromProto charisma <*> fromProto telomeres)
+  toProto Stats{..} = toProto [fuel, ammo, cooling, telomeres]
+  fromProto p = aListN 4 p >>= (\[fuel, ammo, cooling, telomeres] -> Stats <$> fromProto fuel <*> fromProto ammo <*> fromProto cooling <*> fromProto telomeres)
 
 data Action
   = Boost ShipId Coord

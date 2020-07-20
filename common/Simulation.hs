@@ -1,4 +1,4 @@
-module AI.Simulation where
+module Simulation where
 
 import Data.List (sortBy)
 import Data.Function (on)
