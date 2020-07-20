@@ -7,6 +7,7 @@ import Data.Maybe
 import Data.List
 import Data.Functor.Identity
 import Data.Ord
+import Data.Function (on)
 import Control.Arrow
 
 import Protocol
@@ -112,9 +113,10 @@ decideSeeker pos vel epos evel radius =
 produceInitialStats :: GameInfo -> IO Stats
 produceInitialStats info = do
   let m = maxTotal $ maxStats info
-  let telomeres = 1
-  let ammo = 50
-  let cooling = 7
+  let defence = myTeam info == 1
+  let ammo = if defence then 0 else 50
+  let cooling = if defence then 0 else 7
+  let telomeres = if defence then (m - 10) `div` 3 else 2
   pure $ Stats
     { fuel = (m - ammo * 4 - cooling * 12 - telomeres * 2)
     , ammo
@@ -159,9 +161,23 @@ produceMoves info (state:_) = pure $ telomereCommands ++ orbitalCommands ++ weap
 
     weaponCommands = mapMaybe weaponControl ourShips
     orbitalCommands = mapMaybe orbitalControl ourShips
-    telomereCommands = telomereControl ourShips
+    telomereCommands = if ourTeam == 1
+                       then concatMap telomereControl ourShips ++ concatMap telomereControlSpread ourShips
+                       else []
 
-    telomereControl _ = []
+    randpm1 n = [-1, 0, 1] !! (fromIntegral (n `mod` 3))
+
+    telomereControlSpread ship =
+        let coinciding = filter (\s -> shipPos ship == shipPos s && shipVel ship == shipVel s) ourShips
+            best = maximumBy (compare `on` (\s -> (fuel $ shipStats s) % (telomeres $ shipStats s))) coinciding
+            ShipId id = shipId ship
+        in if (orbitalControl ship == Nothing) -- && (ship == best)
+           then [Boost (shipId ship) (Coord (randpm1 id) (randpm1 (id+1)))] -- not random 
+           else []
+
+    telomereControl ship | orbitalControl ship == Nothing = 
+        [Mitosis (shipId ship) $ Stats (fuel (shipStats ship) `div` 2) (ammo (shipStats ship) `div` 2) (cooling (shipStats ship) `div` 2) 1]
+                         | otherwise = []
 
     ourShips = filter ((ourTeam ==) . shipTeam) $ fst <$> gameShips state
     orbitalControl ship = case negatec2p $ decideOrbital (p2c $ shipPos ship) (p2c $ shipVel ship) radius of
