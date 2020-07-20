@@ -174,8 +174,8 @@ tryBranchCoMove ctx@MctsCtx{..} w moveA cm@CoMcts{..} = do
 initMcts :: (Monad m, Ord moveA, Ord moveB) => MctsCtx m world moveA moveB -> world -> m (Mcts world moveA moveB)
 initMcts ctx@MctsCtx{..} w = createMoves ctx w (calcScore w)
 
-runMcts :: (Monad m, Ord moveA, Ord moveB) => MctsCtx m world moveA moveB -> Mcts world moveA moveB-> m (Mcts world moveA moveB)
-runMcts ctx m = experiment (tryBranchMove ctx) =<< selectMoves ctx m
+runMcts :: (Monad m, Ord moveA, Ord moveB) => MctsCtx m world moveA moveB -> Int -> Mcts world moveA moveB -> m (Mcts world moveA moveB)
+runMcts ctx rollouts m = experiment (nTimes rollouts $ tryBranchMove ctx) =<< selectMoves ctx m
 
 nTimes :: Monad m => Int -> (a -> m a) -> a -> m a
 nTimes 0 _ x = pure x
