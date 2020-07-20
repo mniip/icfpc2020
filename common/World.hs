@@ -3,7 +3,11 @@ module World where
 import Data.List (sortBy)
 import Data.Function (on)
 import qualified Data.Map as M
+import System.Random
+import Control.Monad.Trans.State (runState)
 -- import Protocol
+
+import MCTS
 
 type Point = (Int, Int)
 
@@ -102,7 +106,7 @@ applyGrav :: Object -> Object
 applyGrav (Object t c v tp s mtp) = Object t c v' tp s mtp
     where (vx, vy) = v
           n = norm v
-          gv = (vx `quot` n, vy `quot` n)
+          gv = if n == 0 then (0, 0) else (vx `quot` n, vy `quot` n)
           v' = v `vecp` gv
 
 updatePhysics :: World -> World
@@ -157,3 +161,20 @@ worldScore myteam world =
     else (if enemy == 0 then 1 else 0) -- Attacker
     where ally = M.size $ M.filter (\o -> team o == myteam) world
           enemy = M.size $ M.filter (\o -> team o /= myteam) world
+
+testMcts = MctsCtx (World.tickWorld 10 100) (worldScore True) (randomMove True) (randomMove False) uniformDouble
+    where uniformDouble = getStdRandom . runState . uniformRMDouble
+          randomMove myteam world = let moves = playerMoves myteam world
+                                        len = length moves
+                                    in do
+                                        i <- randomRIO (0, len-1)
+                                        if len == 0 then return [] else return [moves !! i]
+
+testWorld :: World
+testWorld = M.fromList [(0, obj1), (1, obj2)]
+    where obj1 = Object True (10, 0) (0, 0) 0 (Stats 10 10 10 10) 10
+          obj2 = Object False (-10, 0) (0, 0) 0 (Stats 10 10 10 10) 10
+
+test a b = do
+    m <- nTimes a (runMcts testMcts b) (initMcts testMcts testWorld)
+    return $ selectBestMove m
