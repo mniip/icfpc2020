@@ -2,6 +2,7 @@
 
 module MCTS where
 
+import Control.Arrow
 import Control.Comonad.Store
 import qualified Data.Map.Strict as M
 import System.Random
@@ -59,17 +60,23 @@ data MctsCtx m world moveA moveB = MctsCtx
   , uniformDouble :: (Double, Double) -> m Double
   }
 
+selectBestAMove :: Mcts world moveA moveB -> Maybe moveA
+selectBestAMove Mcts{..} = fst $ maximumBy (comparing snd) $ (Nothing, currentScore) : map (Just *** coMctsAverageScore) (M.toList subTree)
+
+selectWorstBMove :: CoMcts world moveA moveB -> moveB
+selectWorstBMove CoMcts{..} = fst $ maximumBy (comparing $ mctsAverageCoScore . snd) $ M.toList coSubTree
+
 -- Nothing = branch from this tree
-selectAMove :: Monad m => MctsCtx m world moveA moveB -> Mcts world moveA moveB -> m (Maybe moveA)
-selectAMove MctsCtx{..} Mcts{..} = makeChoice (M.toList subTree) <$> uniformDouble (0, totalScore)
+selectWeightedAMove :: Monad m => MctsCtx m world moveA moveB -> Mcts world moveA moveB -> m (Maybe moveA)
+selectWeightedAMove MctsCtx{..} Mcts{..} = makeChoice (M.toList subTree) <$> uniformDouble (0, totalScore)
   where
     makeChoice [] !p      = Nothing
     makeChoice ((move, CoMcts{..}):cms) !p
       | p <= coTotalScore = Just move
       | otherwise         = makeChoice cms (p - coTotalScore)
 
-selectBMove :: Monad m => MctsCtx m world moveA moveB -> CoMcts world moveA moveB -> m moveB
-selectBMove MctsCtx{..} CoMcts{..} = makeChoice (M.toList coSubTree) <$> uniformDouble (0, fromIntegral coNumLeaves - coTotalScore)
+selectWeightedBMove :: Monad m => MctsCtx m world moveA moveB -> CoMcts world moveA moveB -> m moveB
+selectWeightedBMove MctsCtx{..} CoMcts{..} = makeChoice (M.toList coSubTree) <$> uniformDouble (0, fromIntegral coNumLeaves - coTotalScore)
   where
     makeChoice [(move, _)] !p = move
     makeChoice ((move, Mcts{..}):ms) !p
@@ -77,7 +84,7 @@ selectBMove MctsCtx{..} CoMcts{..} = makeChoice (M.toList coSubTree) <$> uniform
       | otherwise             = makeChoice ms (p - (fromIntegral numLeaves - totalScore))
 
 selectMoves :: (Ord moveA, Ord moveB, Monad m) => MctsCtx m world moveA moveB -> Mcts world moveA moveB -> m (Store (Mcts world moveA moveB) (Mcts world moveA moveB))
-selectMoves ctx m@Mcts{..} = selectAMove ctx m >>= \case
+selectMoves ctx m@Mcts{..} = pure (selectBestAMove m) >>= \case
   Just moveA -> do
     let cm = subTree M.! moveA
     coW <- selectCoMoves ctx cm
@@ -93,7 +100,7 @@ selectMoves ctx m@Mcts{..} = selectAMove ctx m >>= \case
 
 selectCoMoves :: (Ord moveA, Ord moveB, Monad m) => MctsCtx m world moveA moveB -> CoMcts world moveA moveB -> m (Store (Mcts world moveA moveB) (CoMcts world moveA moveB))
 selectCoMoves ctx cm@CoMcts{..} = do
-  moveB <- selectBMove ctx cm
+  moveB <- pure $ selectWorstBMove cm
   let m = coSubTree M.! moveB
   w <- selectMoves ctx m
   let updateCM m' = CoMcts
@@ -171,8 +178,14 @@ tryBranchCoMove ctx@MctsCtx{..} w moveA cm@CoMcts{..} = do
         }
     _ -> pure cm {- no new moves -}
 
-initMcts :: (Monad m, Ord moveA, Ord moveB) => MctsCtx m world moveA moveB -> world -> m (Mcts world moveA moveB)
-initMcts ctx@MctsCtx{..} w = createMoves ctx w (calcScore w)
+initMcts :: (Monad m, Ord moveA, Ord moveB) => MctsCtx m world moveA moveB -> world -> Mcts world moveA moveB
+initMcts ctx@MctsCtx{..} w = Mcts
+  { worldState = w
+  , currentScore = calcScore w
+  , subTree = M.empty
+  , totalScore = calcScore w
+  , numLeaves = 1
+  }
 
 runMcts :: (Monad m, Ord moveA, Ord moveB) => MctsCtx m world moveA moveB -> Int -> Mcts world moveA moveB -> m (Mcts world moveA moveB)
 runMcts ctx rollouts m = experiment (nTimes rollouts $ tryBranchMove ctx) =<< selectMoves ctx m
