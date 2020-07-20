@@ -134,12 +134,26 @@ tickWorld planet field moveA moveB world = world'
           worldMoved = (cleanWorld planet field) . updatePhysics $ foldr moveShip world boosts
           world' = foldr doAction worldMoved actions
 
-enemyShips :: Bool -> World -> [Object]
-enemyShips myteam world = filter (\o -> team o /= myteam) . map snd $ M.toList world
+enemyShips :: Bool -> World -> [(Int, Object)]
+enemyShips myteam world = filter (\o -> team (snd o) /= myteam) $ M.toList world
 
-possibleMoves :: Bool -> World -> Int -> Moves
-possibleMoves myteam world id = undefined
-    where dirs = [Boost id (dx, dy) | dx <- [-1..1], dy <- [-1..1]]
+possibleMoves :: Int -> Object -> World -> Moves
+possibleMoves id obj world = det ++ dirs ++ lasers
+    where myteam = team obj
+          dirs = [Boost id (dx, dy) | dx <- [-1..1], dy <- [-1..1]]
           det = [Detonate id]
-          enemyCoords = map (\o -> (coord o) `vecp` (vel o)) $ enemyShips myteam world
-          targets = [(x+dx, y+dy) | (x, y) <- enemyCoords, dx <- [-2..2], dy <- [-2..2]]
+          enemyCoords = map (\(i, o) -> (i, (coord o) `vecp` (vel o))) $ enemyShips myteam world
+          targets = [(i, (x+dx, y+dy)) | (i, (x, y)) <- enemyCoords, dx <- [-2..2], dy <- [-2..2]]
+          lasers = [Laser i targ pow | (i, targ) <- targets, pow <- [1..mana (stats obj)]]
+
+playerMoves :: Bool -> World -> Moves
+playerMoves myteam world = concatMap (\(i, o) -> possibleMoves i o world) allyShips
+    where allyShips = filter (\(i, o) -> team o == myteam) $ M.toList world
+
+worldScore :: Bool -> World -> Double
+worldScore myteam world =
+    if myteam
+    then (if ally > 0 then 1 else 0) -- Defender
+    else (if enemy == 0 then 1 else 0) -- Attacker
+    where ally = M.size $ M.filter (\o -> team o == myteam) world
+          enemy = M.size $ M.filter (\o -> team o /= myteam) world
