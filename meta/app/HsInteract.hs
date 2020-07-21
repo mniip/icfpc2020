@@ -95,7 +95,7 @@ main = do
       putStrLn $ "Sending " ++ pprList req
       let modReq = map (\case True -> '1'; False -> '0') $ modulate req
       putStrLn $ "Sending raw " ++ modReq
-      request <- setRequestBodyLBS (BLU.fromString modReq) <$> parseRequest ("POST https://icfpc2020-api.testkontur.ru/aliens/send?apiKey=5b1e7596cd5446e18dd969e5fcede90b")
+      request <- setRequestBodyLBS (BLU.fromString modReq) <$> parseRequest ("POST https://icfpc2020-api.testkontur.ru/aliens/send?apiKey=XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
       response <- httpLBS request
       case show (getResponseStatusCode response) of
         "200" -> do

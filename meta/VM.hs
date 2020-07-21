@@ -365,7 +365,7 @@ mkGlobals = do
       whnfPpr glob clos >> putStrLn ""
       readClosure clos >>= \case
         ClosureBits bits -> do
-          request' <- parseRequest ("POST https://icfpc2020-api.testkontur.ru/aliens/send?apiKey=5b1e7596cd5446e18dd969e5fcede90b")
+          request' <- parseRequest ("POST https://icfpc2020-api.testkontur.ru/aliens/send?apiKey=XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX")
           let request = setRequestBodyLBS (BLU.fromString $ map (\b -> if b then '1' else '0') $ elems bits) request'
           response <- httpLBS request
           putStrLn "Eval In:"
