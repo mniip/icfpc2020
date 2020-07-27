@@ -182,7 +182,9 @@ In the meantime, we start cracking away at the Tic-Tac-Toe and the matching pair
 T+16:30
 -------
 When we enter this screen, the program makes a time request to the alien satellite.
-[](writeup_img/interaction4.png)
+
+![](writeup_img/interaction4.png)
+
 We stub the code so as to let us manually input the "would-be" satellite response. We play around with the returned time.
 
 Is this a timeline? This point reads 0, must be the present. The point on the far right seems to be at T+72:00!. These pictographs though, they match the ones in the galaxy. Are these different races? Is this showing a timeline of when races have appeared and gone extinct?
